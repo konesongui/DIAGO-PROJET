@@ -1,0 +1,50 @@
+# Dépendances
+/vendor
+/node_modules
+/public/build
+/public/hot
+/public/storage
+
+# Environnement et secrets
+.env
+.env.*
+!.env.example
+auth.json
+cookies.txt
+*.pem
+*.key
+!storage/oauth-*.key.example
+
+# Archives et sauvegardes
+*.zip
+*.tar
+*.tar.gz
+*.sql
+*.sql.gz
+*.dump
+
+# Laravel
+/storage/*.key
+/storage/pail
+/.phpunit.result.cache
+/.phpunit.cache
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log
+
+# Outils et IDE
+/.idea
+/.vscode
+/.fleet
+/.nova
+/.zed
+_ide_helper.php
+_ide_helper_models.php
+.phpstorm.meta.php
+
+# Système
+.DS_Store
+Thumbs.db
+*.swp
+*~

@@ -104,9 +104,9 @@ class ComptabiliteController extends AdminController
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('label', 'like', "%{$search}%")
-                  ->orWhere('reference', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
+                $q->where('label', 'ilike', "%{$search}%")
+                  ->orWhere('reference', 'ilike', "%{$search}%")
+                  ->orWhere('description', 'ilike', "%{$search}%");
             });
         }
 
@@ -214,7 +214,7 @@ class ComptabiliteController extends AdminController
                                         ->where('id', '<', $movement->id);
                                 });
                         })
-                        ->sum(DB::raw('CASE WHEN movement_type = "entry" THEN amount ELSE -amount END'));
+                        ->sum(DB::raw("CASE WHEN movement_type = 'entry' THEN amount ELSE -amount END"));
                     $previousBalance += (float) $account->initial_balance;
                 }
 
@@ -485,7 +485,7 @@ class ComptabiliteController extends AdminController
         }
 
         $balance = (float) $account->initial_balance + (float) $account->movements()
-            ->sum(DB::raw('CASE WHEN movement_type = "entry" THEN amount ELSE -amount END'));
+            ->sum(DB::raw("CASE WHEN movement_type = 'entry' THEN amount ELSE -amount END"));
         $account->update(['balance' => $balance]);
     }
 
@@ -1306,9 +1306,9 @@ class ComptabiliteController extends AdminController
             if ($request->filled('search')) {
                 $search = $request->search;
                 $query->where(function ($builder) use ($search) {
-                    $builder->where('name', 'like', "%{$search}%")
-                        ->orWhere('reference', 'like', "%{$search}%")
-                        ->orWhere('asset_category', 'like', "%{$search}%");
+                    $builder->where('name', 'ilike', "%{$search}%")
+                        ->orWhere('reference', 'ilike', "%{$search}%")
+                        ->orWhere('asset_category', 'ilike', "%{$search}%");
                 });
             }
 
@@ -1387,9 +1387,9 @@ class ComptabiliteController extends AdminController
                 if ($request->filled('search')) {
                     $search = $request->search;
                     $query->where(function ($builder) use ($search) {
-                        $builder->where('invoice_number', 'like', "%{$search}%")
-                            ->orWhere('supplier_name', 'like', "%{$search}%")
-                            ->orWhere('original_filename', 'like', "%{$search}%");
+                        $builder->where('invoice_number', 'ilike', "%{$search}%")
+                            ->orWhere('supplier_name', 'ilike', "%{$search}%")
+                            ->orWhere('original_filename', 'ilike', "%{$search}%");
                     });
                 }
 

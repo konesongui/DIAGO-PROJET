@@ -17,7 +17,6 @@ use App\Http\Controllers\Admin\SuccursaleController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\QrAttendanceController;
 use App\Http\Controllers\Auth\AuthController;
-use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\SuperAdminConsoleController;
 use Illuminate\Support\Facades\Route;
 

@@ -27,9 +27,9 @@ class EmployeeController extends AdminController
 
         $employees = Employee::where('entreprise_id', auth()->user()->entreprise_id)
             ->where(function ($query) use ($term) {
-                $query->where('full_name', 'like', '%' . $term . '%')
-                    ->orWhere('matricule', 'like', '%' . $term . '%')
-                    ->orWhere('email', 'like', '%' . $term . '%');
+                $query->where('full_name', 'ilike', '%' . $term . '%')
+                    ->orWhere('matricule', 'ilike', '%' . $term . '%')
+                    ->orWhere('email', 'ilike', '%' . $term . '%');
             })
             ->orderBy('full_name')
             ->limit(8)

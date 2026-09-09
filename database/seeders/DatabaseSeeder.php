@@ -13,9 +13,9 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call(RoleSeeder::class);
-        $this->call(AccountingSeeder::class);
-        $this->call(HrCommercialSeeder::class);
 
+        // L'entreprise doit exister avant les seeders qui y rattachent des
+        // données (employés, prospects), sous peine de violer la clé étrangère.
         $entreprise = Entreprise::firstOrCreate(
             ['slug' => 'diagoma-demo'],
             [
@@ -26,6 +26,9 @@ class DatabaseSeeder extends Seeder
                 'created_by' => null,
             ]
         );
+
+        $this->call(AccountingSeeder::class);
+        $this->call(HrCommercialSeeder::class);
 
         $adminRole = Role::where('name', 'admin')->first();
         $superAdminRole = Role::where('name', 'super_admin')->first();
