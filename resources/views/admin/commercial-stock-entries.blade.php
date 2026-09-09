@@ -1,0 +1,6 @@
+@extends('admin.layout')
+@section('content')
+<div class="d-flex justify-content-between align-items-center mb-5"><div><div class="text-uppercase text-muted fs-8 fw-bold">Commercial / Stock</div><h2 class="fs-2 fw-bold mb-1">Entrées de stock</h2><p class="text-muted mb-0">Consultez les réceptions enregistrées.</p></div><div class="d-flex gap-2"><a href="{{ route('admin.commercial') }}" class="btn btn-light">Retour</a><a href="{{ route('admin.commercial.stock-entries.create') }}" class="btn btn-primary">Nouvelle entrée de stock</a></div></div>
+@if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
+<div class="card border-0"><div class="card-header border-0"><h3 class="card-title">Entrées enregistrées</h3></div><div class="card-body table-responsive"><table class="table align-middle"><thead><tr><th>Date</th><th>Lignes</th><th>Total achat</th><th>Bénéfice total</th></tr></thead><tbody>@forelse($entries as $entry)<tr><td>{{ $entry->entry_date->format('d/m/Y') }}</td><td>{{ $entry->lines->count() }}</td><td>{{ number_format($entry->total_purchase,2,',',' ') }} FCFA</td><td>{{ number_format($entry->total_profit,2,',',' ') }} FCFA</td></tr>@empty<tr><td colspan="4" class="text-center text-muted">Aucune entrée enregistrée.</td></tr>@endforelse</tbody></table></div></div>
+@endsection

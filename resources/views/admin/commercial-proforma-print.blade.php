@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="fr">
+<head><meta charset="utf-8"><title>Proforma - {{ $proforma->client_name }}</title><style>body{font-family:Arial,sans-serif;color:#1f2937;margin:40px}h1{color:#1d4ed8}.meta{display:flex;justify-content:space-between;margin:24px 0}.meta div{width:48%}table{width:100%;border-collapse:collapse;margin-top:25px}th,td{border:1px solid #d1d5db;padding:10px;text-align:left}th{background:#eff6ff}.totals{width:320px;margin-left:auto;margin-top:24px}.totals div{display:flex;justify-content:space-between;padding:5px}.total{font-size:18px;font-weight:bold;border-top:2px solid #1d4ed8;margin-top:8px}@media print{.no-print{display:none}}</style></head>
+<body>
+<button class="no-print" onclick="window.print()">Imprimer</button>
+<h1>PROFORMA</h1>
+<div class="meta"><div><strong>Client</strong><br>{{ $proforma->client_name }}<br>{{ $proforma->client_phone }}</div><div><strong>Date :</strong> {{ $proforma->creation_date->format('d/m/Y') }}<br><strong>Date limite :</strong> {{ $proforma->due_date?->format('d/m/Y') ?: '-' }}<br><strong>Paiement :</strong> {{ $proforma->payment_method ?: '-' }}</div></div>
+<p><strong>Objet :</strong> {{ $proforma->subject ?: '-' }}</p>
+<table><thead><tr><th>Type</th><th>Désignation</th><th>Unité</th><th>Qté</th><th>Prix unitaire</th><th>Total</th></tr></thead><tbody>@foreach($proforma->lines as $line)<tr><td>{{ $line->type === 'service' ? 'Service' : 'Produit' }}</td><td>{{ $line->item_name }}</td><td>{{ $line->unit ?: '-' }}</td><td>{{ $line->quantity }}</td><td>{{ number_format($line->unit_price, 0, ',', ' ') }} XOF</td><td>{{ number_format($line->line_total, 0, ',', ' ') }} XOF</td></tr>@endforeach</tbody></table>
+<div class="totals"><div><span>Total HT</span><strong>{{ number_format($proforma->total_ht, 0, ',', ' ') }} XOF</strong></div><div><span>Remise</span><strong>{{ number_format($proforma->total_discount, 0, ',', ' ') }} XOF</strong></div><div><span>Net HT</span><strong>{{ number_format($proforma->net_ht, 0, ',', ' ') }} XOF</strong></div><div><span>Taxes</span><strong>{{ number_format($proforma->tax_amount, 0, ',', ' ') }} XOF</strong></div><div class="total"><span>Total TTC</span><strong>{{ number_format($proforma->total_ttc, 0, ',', ' ') }} XOF</strong></div></div>
+</body></html>

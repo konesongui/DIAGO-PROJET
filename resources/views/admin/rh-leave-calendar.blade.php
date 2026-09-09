@@ -1,0 +1,4 @@
+@extends('admin.layout')
+@section('content')
+<div class="card border-0"><div class="card-header p-5 d-flex justify-content-between align-items-center"><div><h2>Calendrier des congés</h2><p class="text-muted mb-0">Congés validés uniquement.</p></div><a href="{{ route('admin.rh') }}" class="btn btn-light">Retour à RH &amp; Paie</a></div><div class="card-body"><div class="row g-4">@forelse($leaves as $leave)<div class="col-md-4"><div class="border rounded p-4"><h4>{{$leave->employee->full_name}}</h4><div class="text-primary fw-bold">{{$leave->leaveType->name}}</div><div>{{$leave->start_date->format('d/m/Y')}} au {{$leave->end_date->format('d/m/Y')}}</div><span class="badge badge-light-success mt-2">{{$leave->days}} jour(s)</span></div></div>@empty<div class="col-12 text-center text-muted py-8">Aucun congé validé.</div>@endforelse</div></div></div>
+@endsection
