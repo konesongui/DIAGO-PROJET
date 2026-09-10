@@ -1,7 +1,10 @@
-@props(['title', 'subtitle' => null])
+@props(['title', 'subtitle' => null, 'back' => null, 'backLabel' => null])
 
 <div {{ $attributes->merge(['class' => 'dg-page-header']) }}>
     <div>
+        @if($back)
+            <a href="{{ $back }}" class="dg-back-link"><i class="bi bi-arrow-left"></i>{{ $backLabel ?? __('Back') }}</a>
+        @endif
         <h1>{{ $title }}</h1>
         @if($subtitle)
             <p>{{ $subtitle }}</p>

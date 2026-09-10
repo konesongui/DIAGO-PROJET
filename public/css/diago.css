@@ -66,7 +66,20 @@
     font-size: 15px;
     color: var(--dg-muted);
 }
-.dg-page-header__actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.dg-page-header__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.dg-back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    font-family: var(--dg-font);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--dg-muted);
+    text-decoration: none;
+}
+.dg-back-link .bi { color: inherit; }
+.dg-back-link:hover { color: var(--dg-navy); }
 
 .dg-section-title {
     margin: 0 0 16px;
@@ -130,6 +143,24 @@
 .dg-icon-btn:focus-visible { outline: none; box-shadow: var(--dg-focus); }
 .dg-icon-btn .bi { color: inherit; font-size: 16px; }
 .dg-icon-btn--ghost { border-color: transparent; background: transparent; }
+
+/* Bouton d'apparence lien (actions secondaires dans une carte) */
+.dg-link-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: var(--dg-font);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--dg-navy);
+    text-decoration: none;
+    cursor: pointer;
+}
+.dg-link-btn .bi { color: inherit; }
+.dg-link-btn:hover { color: var(--dg-navy-hover); text-decoration: underline; }
 
 /* ---------- Badges de statut ---------- */
 .dg-badge {
@@ -413,6 +444,18 @@
     color: var(--dg-navy);
 }
 
+/* ---------- Fenêtres modales ---------- */
+.dg-modal .modal-content { border: 0; border-radius: var(--dg-radius-lg); font-family: var(--dg-font); color: var(--dg-text); }
+.dg-modal .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--dg-border); background: var(--dg-surface); }
+.dg-modal .modal-title { font-size: 17px; font-weight: 600; color: var(--dg-text); }
+.dg-modal .modal-body { padding: 20px 24px; }
+.dg-modal .modal-footer { padding: 16px 24px; border-top: 1px solid var(--dg-border); }
+
+/* ---------- Cartes d'action (écran Rapports) ---------- */
+.dg-action-card { display: flex; flex-direction: column; height: 100%; }
+.dg-action-card .dg-card__header { margin-bottom: 12px; }
+.dg-action-card .dg-card__text { flex: 1; }
+
 /* ---------- Graphiques ---------- */
 .dg-chart { position: relative; height: 260px; }
 .dg-chart--sm { height: 200px; }
@@ -437,7 +480,7 @@
 
 /* ---------- Utilitaires ---------- */
 .dg-grid-2 { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 20px; }
-.dg-grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+.dg-grid-3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }
 .dg-grid-halves { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 20px; }
 .dg-grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
 .dg-section-title--spaced { margin-top: 36px; }

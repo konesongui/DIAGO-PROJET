@@ -162,6 +162,9 @@
         gap: 6px;
     }
 
+    .ohada-pill .bi,
+    .module-action .bi { color: inherit; }
+
     @media (max-width: 1199px) {
         .ohada-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
@@ -174,7 +177,7 @@
 
 <div class="ohada-shell">
     <div class="ohada-hero">
-        <span class="ohada-pill"><i class="ki-duotone ki-wallet fs-5"></i> Comptabilité</span>
+        <span class="ohada-pill"><i class="bi bi-wallet2 fs-5"></i> Comptabilité</span>
         <h1>{{ $title ?? 'Espace Comptabilite' }}</h1>
     </div>
 
@@ -194,7 +197,7 @@
                         </div>
 
                         <div class="module-icon {{ $module['color'] ?? 'blue' }}">
-                            <i class="ki-duotone {{ $module['icon'] ?? 'ki-wallet' }} fs-2"></i>
+                            <i class="bi {{ $module['icon'] ?? 'bi-wallet2' }} fs-2"></i>
                         </div>
 
                         <h3 class="module-title">{{ $module['title'] }}</h3>
@@ -202,7 +205,7 @@
 
                         <div class="module-footer">
                             <span class="module-tagline">{{ ($module['is_ohada'] ?? false) ? 'Conforme OHADA' : 'Module support' }}</span>
-                            <span class="module-action"><i class="ki-duotone ki-arrow-right fs-6"></i> Ouvrir</span>
+                            <span class="module-action"><i class="bi bi-arrow-right fs-6"></i> Ouvrir</span>
                         </div>
                     </a>
                 @else
@@ -213,7 +216,7 @@
                         </div>
 
                         <div class="module-icon {{ $module['color'] ?? 'blue' }}">
-                            <i class="ki-duotone {{ $module['icon'] ?? 'ki-wallet' }} fs-2"></i>
+                            <i class="bi {{ $module['icon'] ?? 'bi-wallet2' }} fs-2"></i>
                         </div>
 
                         <h3 class="module-title">{{ $module['title'] }}</h3>
@@ -221,7 +224,7 @@
 
                         <div class="module-footer">
                             <span class="module-tagline">{{ ($module['is_ohada'] ?? false) ? 'Conforme OHADA' : 'Module support' }}</span>
-                            <span class="module-action" style="background:#eef2f7;color:#64748b;cursor:not-allowed;"><i class="ki-duotone ki-timer fs-6"></i> A activer</span>
+                            <span class="module-action" style="background:#eef2f7;color:#64748b;cursor:not-allowed;"><i class="bi bi-clock fs-6"></i> A activer</span>
                         </div>
                     </div>
                 @endif

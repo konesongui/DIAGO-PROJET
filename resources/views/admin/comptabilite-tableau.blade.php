@@ -3,53 +3,134 @@
 @section('content')
 @php
     $money = fn ($value) => money((float) $value);
-    $cards = [
-        ['Liquidité totale', $liquidity, 'cash_accounts', 'primary'],
-        ['Entrées caisse et banque', $cashIn + $bankIn, 'cash_movements', 'success'],
-        ['Sorties caisse et banque', $cashOut + $bankOut, 'bank_transactions', 'danger'],
-        ['Flux du mois', $monthlyTotal, 'transfers', 'warning'],
+    // Chaque détail liste exactement les éléments qui composent le montant affiché.
+    $cashMovements = $detailLists['cash_movements'];
+    $bankTransactions = $detailLists['bank_transactions'];
+    $details = [
+        $detailLists['cash_accounts']->concat($detailLists['bank_accounts']),
+        $cashMovements->where('movement_type', 'entry')->concat($bankTransactions->where('transaction_type', 'credit')),
+        $cashMovements->where('movement_type', 'exit')->concat($bankTransactions->where('transaction_type', 'debit')),
+        $cashMovements->filter(fn ($item) => $item->movement_date?->isSameMonth(now()))
+            ->concat($bankTransactions->filter(fn ($item) => $item->transaction_date?->isSameMonth(now()))),
     ];
-    $maxFlow = max((float) $months->max(fn ($month) => max($month['entries'], $month['sorties'])), 1);
+    $cards = [
+        ['Liquidité totale', $liquidity, 'bi-wallet2', 'Soldes des caisses et des banques'],
+        ['Entrées caisse et banque', $cashIn + $bankIn, 'bi-box-arrow-in-down', 'Encaissements de la période'],
+        ['Sorties caisse et banque', $cashOut + $bankOut, 'bi-box-arrow-up', 'Décaissements de la période'],
+        ['Flux du mois', $monthlyTotal, 'bi-arrow-left-right', 'Mouvements du mois en cours'],
+    ];
+    $indicators = [
+        'Comptes caisse' => $detailLists['cash_accounts']->count(),
+        'Comptes bancaires' => $detailLists['bank_accounts']->count(),
+        'Factures fournisseurs' => $detailLists['supplier_invoices']->count(),
+        'Immobilisations' => $detailLists['fixed_assets']->count(),
+    ];
 @endphp
-<div class="d-flex justify-content-between align-items-center mb-5">
-    <div><div class="text-uppercase text-muted fs-8 fw-bold">Comptabilité</div><h1 class="fs-2 fw-bold mb-1">Tableau Comptabilité</h1><p class="text-muted mb-0">Pilotage des liquidités, flux et engagements financiers.</p></div>
-    <a href="{{ route('admin.comptabilite') }}" class="btn btn-light">Retour aux modules</a>
+
+<div class="dg-font">
+    <x-dg.page-header title="Tableau comptable" subtitle="Pilotage des liquidités, des flux et des engagements financiers." :back="route('admin.comptabilite')" back-label="Comptabilité">
+        <x-slot:actions>
+            <form method="GET" action="{{ route('admin.comptabilite.tableau') }}" class="dg-period" aria-label="Période d’analyse">
+                <input type="date" name="date_debut" value="{{ $periodFrom }}" class="dg-input" aria-label="Date de début">
+                <span class="dg-period__sep">au</span>
+                <input type="date" name="date_fin" value="{{ $periodTo }}" class="dg-input" aria-label="Date de fin">
+                <button type="submit" class="dg-btn dg-btn--outline"><i class="bi bi-funnel"></i>Filtrer</button>
+                <a href="{{ route('admin.comptabilite.tableau') }}" class="dg-btn dg-btn--outline" title="Réinitialiser la période" aria-label="Réinitialiser la période"><i class="bi bi-arrow-counterclockwise"></i></a>
+            </form>
+        </x-slot:actions>
+    </x-dg.page-header>
+
+    <div class="dg-kpi-grid">
+        @foreach($cards as [$label, $value, $icon, $hint])
+            <x-dg.kpi :label="$label" :value="$money($value)" :icon="$icon" :hint="$hint">
+                <button type="button" class="dg-link-btn d-flex mt-2" data-bs-toggle="modal" data-bs-target="#accountingDetail{{ $loop->index }}">
+                    <i class="bi bi-eye"></i>Voir le détail
+                </button>
+            </x-dg.kpi>
+        @endforeach
+    </div>
+
+    <div class="dg-grid-2">
+        <x-dg.card title="Évolution des flux (6 derniers mois)" :meta="'Montants en ' . currency_symbol()">
+            <div class="dg-chart"><canvas id="accountingFlowsChart" role="img" aria-label="Évolution des entrées et sorties sur six mois"></canvas></div>
+        </x-dg.card>
+        <x-dg.card title="Indicateurs">
+            <table class="dg-mini-table">
+                <tbody>
+                    @foreach($indicators as $label => $count)
+                        <tr><td>{{ $label }}</td><td>{{ $count }}</td></tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </x-dg.card>
+    </div>
 </div>
-<div class="card border-0 shadow-sm mb-5"><div class="card-body">
-    <form method="GET" action="{{ route('admin.comptabilite.tableau') }}" class="d-flex flex-wrap align-items-end gap-3">
-        <div><label class="form-label fw-bold mb-1">Période du</label><input type="date" name="date_debut" value="{{ $periodFrom }}" class="form-control"></div>
-        <div><label class="form-label fw-bold mb-1">au</label><input type="date" name="date_fin" value="{{ $periodTo }}" class="form-control"></div>
-        <button type="submit" class="btn btn-primary">Filtrer toute la page</button>
-        <a href="{{ route('admin.comptabilite.tableau') }}" class="btn btn-light">Réinitialiser</a>
-    </form>
-</div></div>
-<div class="row g-5 mb-5">
-@foreach($cards as [$label, $value, $detailKey, $color])
-    @php($modalId = 'accountingDetail' . $loop->index)
-    <div class="col-xl-3 col-md-6"><div class="card border-0 shadow-sm h-100"><div class="card-body p-5">
-        <div class="d-flex justify-content-between align-items-start"><span class="text-muted text-uppercase fs-8 fw-bold">{{ $label }}</span><button class="btn btn-icon btn-sm btn-light-primary" data-bs-toggle="modal" data-bs-target="#{{ $modalId }}" title="Voir les détails" aria-label="Voir les détails"><i class="bi bi-eye"></i></button></div>
-        <div class="fs-2hx fw-bold text-{{ $color }} mt-3">{{ $money($value) }}</div><div class="text-muted mt-2">Cliquer sur l’œil pour consulter les opérations.</div>
-    </div></div></div>
-    <div class="modal fade" id="{{ $modalId }}" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
-        <div class="modal-header"><h5 class="modal-title">{{ $label }}</h5><button class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button></div>
-        <div class="modal-body"><div class="table-responsive"><table class="table align-middle"><tbody>
-        @forelse($detailLists[$detailKey] as $item)
-            <tr><td><strong>{{ $item->name ?? $item->label ?? $item->description ?? $item->reference ?? 'Opération' }}</strong><div class="text-muted fs-8">{{ $item->bank_name ?? $item->cashAccount?->name ?? $item->bankAccount?->name ?? $item->transfer_date?->format('d/m/Y') ?? '' }}</div></td><td class="text-end fw-bold">{{ $money($item->amount ?? $item->balance ?? $item->current_balance ?? $item->acquisition_value ?? 0) }}</td></tr>
-        @empty <tr><td class="text-center text-muted py-5">Aucun enregistrement.</td></tr>@endforelse
-        </tbody></table></div></div><div class="modal-footer"><button class="btn btn-light" data-bs-dismiss="modal">Fermer</button></div>
-    </div></div></div>
+
+@foreach($cards as [$label])
+    <div class="modal fade dg-modal" id="accountingDetail{{ $loop->index }}" tabindex="-1" aria-labelledby="accountingDetailTitle{{ $loop->index }}" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="accountingDetailTitle{{ $loop->index }}">{{ $label }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="dg-table-wrap">
+                        <table class="dg-table">
+                            <thead><tr><th>Opération</th><th class="dg-cell-actions">Montant</th></tr></thead>
+                            <tbody>
+                                @forelse($details[$loop->index] as $item)
+                                    <tr>
+                                        <td>
+                                            <span class="dg-cell-strong">{{ $item->name ?? $item->label ?? $item->description ?? $item->reference ?? 'Opération' }}</span>
+                                            <span class="dg-cell-sub">{{ collect([$item->bank_name ?? $item->cashAccount?->name ?? $item->bankAccount?->name, ($item->movement_date ?? $item->transaction_date)?->format('d/m/Y')])->filter()->implode(' · ') }}</span>
+                                        </td>
+                                        <td class="dg-cell-num dg-cell-actions">{{ $money($item->amount ?? $item->balance ?? $item->current_balance ?? $item->acquisition_value ?? 0) }}</td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="2" class="dg-empty">Aucun enregistrement sur la période.</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="dg-btn dg-btn--outline" data-bs-dismiss="modal">Fermer</button>
+                </div>
+            </div>
+        </div>
+    </div>
 @endforeach
-</div>
-<div class="row g-5">
-    <div class="col-xl-8"><div class="card border-0 shadow-sm h-100"><div class="card-header border-0 pt-5"><h3 class="card-title fw-bold">Évolution des flux</h3></div><div class="card-body">
-        @foreach($months as $month)<div class="d-flex align-items-center gap-3 mb-4"><span style="width:38px" class="text-muted fw-semibold">{{ $month['label'] }}</span><div class="flex-grow-1"><div class="progress mb-2" style="height:9px"><div class="progress-bar bg-success" style="width:{{ ($month['entries'] / $maxFlow) * 100 }}%"></div></div><div class="progress" style="height:9px"><div class="progress-bar bg-danger" style="width:{{ ($month['sorties'] / $maxFlow) * 100 }}%"></div></div></div><span class="text-muted fs-8" style="width:115px">{{ $money($month['entries']) }} / {{ $money($month['sorties']) }}</span></div>@endforeach
-        <div class="text-muted fs-8"><span class="badge bg-success">&nbsp;</span> Entrées <span class="badge bg-danger ms-3">&nbsp;</span> Sorties</div>
-    </div></div></div>
-    <div class="col-xl-4"><div class="card border-0 shadow-sm h-100"><div class="card-header border-0 pt-5"><h3 class="card-title fw-bold">Indicateurs</h3></div><div class="card-body">
-        <div class="d-flex justify-content-between border-bottom py-3"><span class="text-muted">Comptes caisse</span><strong>{{ $detailLists['cash_accounts']->count() }}</strong></div>
-        <div class="d-flex justify-content-between border-bottom py-3"><span class="text-muted">Comptes bancaires</span><strong>{{ $detailLists['bank_accounts']->count() }}</strong></div>
-        <div class="d-flex justify-content-between border-bottom py-3"><span class="text-muted">Factures fournisseurs</span><strong>{{ $detailLists['supplier_invoices']->count() }}</strong></div>
-        <div class="d-flex justify-content-between py-3"><span class="text-muted">Immobilisations</span><strong>{{ $detailLists['fixed_assets']->count() }}</strong></div>
-    </div></div></div>
-</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+    const months = @json($months);
+    const compact = new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 });
+    Chart.defaults.font.family = "'Poppins', system-ui, sans-serif";
+    Chart.defaults.color = '#8a93a6';
+    new Chart(document.getElementById('accountingFlowsChart'), {
+        type: 'bar',
+        data: {
+            labels: months.map(month => month.label.charAt(0).toUpperCase() + month.label.slice(1)),
+            datasets: [
+                { label: 'Entrées', data: months.map(month => month.entries), backgroundColor: '#273772', borderRadius: 6, maxBarThickness: 28 },
+                { label: 'Sorties', data: months.map(month => month.sorties), backgroundColor: '#fadf2f', borderRadius: 6, maxBarThickness: 28 }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } },
+                tooltip: { callbacks: { label: context => context.dataset.label + ' : ' + window.formatMoney(context.raw) } }
+            },
+            scales: {
+                x: { grid: { display: false } },
+                y: { beginAtZero: true, grid: { color: 'rgba(138, 147, 166, .16)' }, border: { display: false }, ticks: { callback: value => compact.format(value) } }
+            }
+        }
+    });
+})();
+</script>
 @endsection
