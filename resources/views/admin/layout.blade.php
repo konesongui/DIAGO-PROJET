@@ -412,6 +412,21 @@
         .datatable-export-toolbar .buttons-copy { background:#eef3ff !important; color:#3154b7 !important; }
     </style>
     <link rel="stylesheet" href="{{ asset('css/diago.css') }}" />
+    <script>
+        // Devise de l'entreprise, pour les montants calculés côté navigateur.
+        // Définie dans l'en-tête pour être disponible dès les scripts des pages.
+        window.APP_CURRENCY = {
+            code: @json(currency_symbol() ? company_currency()['code'] : 'XOF'),
+            symbol: @json(currency_symbol()),
+            decimals: {{ currency_decimals() }}
+        };
+        window.formatMoney = function (value, decimals) {
+            var d = typeof decimals === 'number' ? decimals : window.APP_CURRENCY.decimals;
+            return new Intl.NumberFormat('fr-FR', {
+                minimumFractionDigits: d, maximumFractionDigits: d
+            }).format(Number(value) || 0) + ' ' + window.APP_CURRENCY.symbol;
+        };
+    </script>
 </head>
 <body id="kt_app_body" class="dg-app" data-theme-flat="{{ !empty($activePalette['flat']) ? '1' : '0' }}" data-theme-dark="{{ !empty($activePalette['dark_mode']) ? '1' : '0' }}">
     @php
@@ -897,20 +912,6 @@
         })();
     </script>
 
-<script>
-    // Devise de l'entreprise, pour les montants calcules cote navigateur.
-    window.APP_CURRENCY = {
-        code: @json(currency_symbol() ? company_currency()['code'] : 'XOF'),
-        symbol: @json(currency_symbol()),
-        decimals: {{ currency_decimals() }}
-    };
-    window.formatMoney = function (value, decimals) {
-        var d = typeof decimals === 'number' ? decimals : window.APP_CURRENCY.decimals;
-        return new Intl.NumberFormat('fr-FR', {
-            minimumFractionDigits: d, maximumFractionDigits: d
-        }).format(Number(value) || 0) + ' ' + window.APP_CURRENCY.symbol;
-    };
-</script>
 
 @if($pendingAnnualReport ?? null)
 @php($ar = $pendingAnnualReport)

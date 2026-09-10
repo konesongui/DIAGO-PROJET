@@ -413,9 +413,34 @@
     color: var(--dg-navy);
 }
 
+/* ---------- Graphiques ---------- */
+.dg-chart { position: relative; height: 260px; }
+.dg-chart--sm { height: 200px; }
+.dg-donut { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; }
+.dg-donut .dg-chart { flex: 0 0 150px; width: 150px; height: 150px; }
+.dg-legend { flex: 1 1 130px; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.dg-legend li { display: flex; align-items: flex-start; gap: 10px; padding: 4px 0; font-size: 14px; color: var(--dg-text); }
+.dg-legend__swatch { flex-shrink: 0; width: 14px; height: 14px; margin-top: 2px; border-radius: 3px; }
+.dg-legend__label { min-width: 0; line-height: 1.35; }
+.dg-empty-state { display: flex; align-items: center; justify-content: center; min-height: 180px; padding: 20px; text-align: center; font-size: 14px; color: var(--dg-muted); }
+
+/* ---------- Filtre de période compact ---------- */
+.dg-period { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dg-period .dg-input { width: auto; min-height: 42px; padding: 8px 12px; font-size: 14px; }
+.dg-period__sep { font-size: 14px; color: var(--dg-muted); }
+
+/* ---------- Mini-tableau (listes clé / valeur) ---------- */
+.dg-mini-table { width: 100%; font-size: 14px; border-collapse: collapse; }
+.dg-mini-table td { padding: 9px 0; border-bottom: 1px solid var(--dg-border); color: var(--dg-text); }
+.dg-mini-table tr:last-child td { border-bottom: 0; }
+.dg-mini-table td:last-child { text-align: right; font-weight: 600; white-space: nowrap; }
+
 /* ---------- Utilitaires ---------- */
 .dg-grid-2 { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 20px; }
 .dg-grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+.dg-grid-halves { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 20px; }
+.dg-grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+.dg-section-title--spaced { margin-top: 36px; }
 .dg-stack > * + * { margin-top: 20px; }
 .dg-muted { color: var(--dg-muted); }
 
