@@ -25,7 +25,7 @@
                 <div class="card-body p-4 d-flex flex-column">
                     <div class="d-flex align-items-center justify-content-between mb-4">
                         <span class="settings-category">{{ $module['category'] }}</span>
-                        <span class="settings-icon">{{ $module['icon'] }}</span>
+                        <span class="settings-icon"><i class="bi {{ $module['icon'] }}"></i></span>
                     </div>
                     <h3 class="h5 fw-bold text-dark mb-2">{{ $module['title'] }}</h3>
                     <p class="text-muted mb-4 flex-grow-1">{{ $module['description'] }}</p>

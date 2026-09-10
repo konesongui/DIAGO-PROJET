@@ -374,14 +374,14 @@
 
         <div class="d-flex flex-wrap gap-3">
             <div class="landing-stat">
-                <div class="landing-stat-icon">📊</div>
+                <div class="landing-stat-icon"><i class="bi bi-grid"></i></div>
                 <div>
                     <strong>{{ count($cards) }}</strong>
                     <span>Modules</span>
                 </div>
             </div>
             <div class="landing-stat">
-                <div class="landing-stat-icon">⚡</div>
+                <div class="landing-stat-icon"><i class="bi bi-lightning-charge"></i></div>
                 <div>
                     <strong>24/7</strong>
                     <span>Monitoring</span>
@@ -441,7 +441,7 @@
         @foreach($cards as $card)
             <a href="{{ $card['link'] }}" class="module-card">
                 <div class="card-head">
-                    <div class="module-icon">{{ $card['icon'] ?? '⚙️' }}</div>
+                    <div class="module-icon"><i class="bi {{ $card['icon'] ?? 'bi-gear' }}"></i></div>
                     <span class="module-tag">Admin</span>
                 </div>
                 <h3>{{ $card['title'] }}</h3>

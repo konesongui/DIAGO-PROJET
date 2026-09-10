@@ -28,7 +28,7 @@
 
         <div class="landing-card p-4 p-md-5 mb-4">
             <div class="d-flex align-items-center gap-3 mb-4">
-                <span class="fs-1">🌐</span>
+                <i class="bi bi-globe fs-1"></i>
                 <div>
                     <div class="text-uppercase text-muted small fw-bold">Accueil</div>
                     <h2 class="h4 fw-bold mb-0">Branding et SEO</h2>
@@ -60,7 +60,7 @@
 
         <div class="landing-card p-4 p-md-5 mb-4">
             <div class="d-flex align-items-center gap-3 mb-4">
-                <span class="fs-1">✨</span>
+                <i class="bi bi-stars fs-1"></i>
                 <div>
                     <div class="text-uppercase text-muted small fw-bold">Hero</div>
                     <h2 class="h4 fw-bold mb-0">Texte d’accroche</h2>
@@ -100,7 +100,7 @@
 
         <div class="landing-card p-4 p-md-5 mb-4">
             <div class="d-flex align-items-center gap-3 mb-4">
-                <span class="fs-1">📸</span>
+                <i class="bi bi-images fs-1"></i>
                 <div>
                     <div class="text-uppercase text-muted small fw-bold">Carousel</div>
                     <h2 class="h4 fw-bold mb-0">Slides du header</h2>
@@ -111,7 +111,7 @@
 
         <div class="landing-card p-4 p-md-5 mb-4">
             <div class="d-flex align-items-center gap-3 mb-4">
-                <span class="fs-1">🧩</span>
+                <i class="bi bi-grid fs-1"></i>
                 <div>
                     <div class="text-uppercase text-muted small fw-bold">Contenu</div>
                     <h2 class="h4 fw-bold mb-0">Modules et packs</h2>
@@ -131,7 +131,7 @@
 
         <div class="landing-card p-4 p-md-5 mb-4">
             <div class="d-flex align-items-center gap-3 mb-4">
-                <span class="fs-1">📩</span>
+                <i class="bi bi-envelope-paper fs-1"></i>
                 <div>
                     <div class="text-uppercase text-muted small fw-bold">Footer</div>
                     <h2 class="h4 fw-bold mb-0">Coordonnées et CTA</h2>

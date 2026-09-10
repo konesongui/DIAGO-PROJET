@@ -985,7 +985,7 @@
                                 <div class="text-muted fs-8 mt-1">Initial création: {{ money((float) $account->initial_balance) }}</div>
 
                                 <div class="d-flex gap-2 mt-4 flex-wrap">
-                                    <button type="button" class="btn btn-sm btn-light-primary" data-bs-toggle="modal" data-bs-target="#cashAccountDetailsModal-{{ $account->id }}" title="Voir les détails" aria-label="Voir les détails de {{ $account->name }}">👁 Voir</button>
+                                    <button type="button" class="btn btn-sm btn-light-primary" data-bs-toggle="modal" data-bs-target="#cashAccountDetailsModal-{{ $account->id }}" title="Voir les détails" aria-label="Voir les détails de {{ $account->name }}"><i class="bi bi-eye me-1"></i>Voir</button>
                                     <button type="button" class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#editCashAccountModal-{{ $account->id }}">Modifier</button>
                                     <form method="POST" action="{{ route('admin.comptabilite.caisses.toggleStatus', $account) }}" class="d-inline">
                                         @csrf
@@ -1997,8 +1997,8 @@
                 <div class="finance-chart-panel mt-5">
                     <div class="finance-chart-header">Dépenses globales</div>
                     <div class="finance-kpi-grid p-4 mb-0">
-                        <div class="finance-kpi"><div class="icon">🚚</div><div><span class="value">{{ money($expenseTotal ?? 0) }}</span><span class="label">Total dépenses<br><small>Caisse + Banque + Fournisseurs</small></span></div></div>
-                        <div class="finance-kpi"><div class="icon" style="background:linear-gradient(135deg,#f59e0b,#e58b12)">💵</div><div><span class="value">{{ money($expenseTotal ?? 0) }}</span><span class="label">Déjà payé / décaissé<br><small>Taux : 100%</small></span></div></div>
+                        <div class="finance-kpi"><div class="icon"><i class="bi bi-truck"></i></div><div><span class="value">{{ money($expenseTotal ?? 0) }}</span><span class="label">Total dépenses<br><small>Caisse + Banque + Fournisseurs</small></span></div></div>
+                        <div class="finance-kpi"><div class="icon" style="background:linear-gradient(135deg,#f59e0b,#e58b12)"><i class="bi bi-cash"></i></div><div><span class="value">{{ money($expenseTotal ?? 0) }}</span><span class="label">Déjà payé / décaissé<br><small>Taux : 100%</small></span></div></div>
                     </div>
                     <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Source</th><th>Catégorie</th><th>Montant total</th></tr></thead><tbody>
                     @forelse($expenseCategories ?? [] as $row)<tr><td>{{ $row['source'] }}</td><td>{{ $row['category'] }}</td><td class="fw-bold">{{ money($row['amount']) }}</td></tr>@empty<tr><td colspan="3" class="text-center text-muted">Aucune dépense sur cette période.</td></tr>@endforelse
@@ -2015,15 +2015,15 @@
                     @csrf
                     <input type="hidden" name="date_debut" value="{{ $filters['date_debut'] }}">
                     <input type="hidden" name="date_fin" value="{{ $filters['date_fin'] }}">
-                    <label class="fw-bold mb-2">📝 Observation générale :</label>
+                    <label class="fw-bold mb-2">Observation générale :</label>
                     <textarea name="general_observation" class="form-control mb-4" rows="2" placeholder="Saisir une observation générale sur la période">{{ $observations['general'] ?? '' }}</textarea>
-                    <label class="fw-bold mb-2">📌 Observations sur les dépenses :</label>
+                    <label class="fw-bold mb-2">Observations sur les dépenses :</label>
                     <textarea name="expense_observation" class="form-control mb-3" rows="3" placeholder="Renseigner les observations de rapport, anomalies, écarts ou commentaires sur les dépenses">{{ $observations['expenses'] ?? '' }}</textarea>
-                    <button class="btn btn-warning text-white">💾 Enregistrer</button>
+                    <button class="btn btn-warning text-white">Enregistrer</button>
                 </form>
                 <div class="finance-kpi-grid mt-5">
-                    <div class="finance-kpi"><div class="icon" style="background:linear-gradient(135deg,#38a1d6,#2480b5)">⚖</div><div><span class="value">{{ money($totalRealise - $expenseTotal) }}</span><span class="label">Résultat brut<br><small>Bénéfice généré(e) sur la période</small></span></div></div>
-                    <div class="finance-kpi"><div class="icon" style="background:linear-gradient(135deg,#a855c7,#7e3aa0)">⚖</div><div><span class="value">{{ money($encaisse - $expenseTotal) }}</span><span class="label">Résultat net encaissé<br><small>Trésorerie positive sur la période</small></span></div></div>
+                    <div class="finance-kpi"><div class="icon" style="background:linear-gradient(135deg,#38a1d6,#2480b5)"><i class="bi bi-bar-chart-line"></i></div><div><span class="value">{{ money($totalRealise - $expenseTotal) }}</span><span class="label">Résultat brut<br><small>Bénéfice généré(e) sur la période</small></span></div></div>
+                    <div class="finance-kpi"><div class="icon" style="background:linear-gradient(135deg,#a855c7,#7e3aa0)"><i class="bi bi-wallet2"></i></div><div><span class="value">{{ money($encaisse - $expenseTotal) }}</span><span class="label">Résultat net encaissé<br><small>Trésorerie positive sur la période</small></span></div></div>
                 </div>
                 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
                 <script>

@@ -56,15 +56,15 @@
     <form method="GET" class="pilotage-filter d-flex flex-wrap align-items-end gap-3">
         <div><label class="form-label fw-bold">{{ __('Start date') }}</label><input type="date" name="date_debut" value="{{ $filters['date_debut'] }}" class="form-control"></div>
         <div><label class="form-label fw-bold">{{ __('End date') }}</label><input type="date" name="date_fin" value="{{ $filters['date_fin'] }}" class="form-control"></div>
-        <button class="btn btn-primary px-4">🔽 {{ __('Filter') }}</button>
+        <button class="btn btn-primary px-4"><i class="bi bi-funnel me-1"></i>{{ __('Filter') }}</button>
     </form>
-    <div class="section-title">🏦 {{ __('Treasury') }}</div>
+    <div class="section-title">{{ __('Treasury') }}</div>
     <div class="metric-grid mb-5">
-        @foreach([['revenue','Total revenue','#e8f5e9','💰'],['cash_exits','Cash outflows','#ffebee','💳'],['balance','Current balance','#e3f2fd','⚖'],['transactions','Transactions','#fff3e0','↔']] as [$key,$label,$bg,$icon])
-        <div class="stat-card"><div class="stat-icon" style="background:{{ $bg }}">{{ $icon }}</div><div class="stat-number">{{ $key === 'transactions' ? $treasury[$key] : $money($treasury[$key]) }}</div><div class="stat-text">{{ $label }}</div></div>
+        @foreach([['revenue','Total revenue','#e8f5e9','bi-cash-stack'],['cash_exits','Cash outflows','#ffebee','bi-credit-card'],['balance','Current balance','#e3f2fd','bi-wallet2'],['transactions','Transactions','#fff3e0','bi-arrow-left-right']] as [$key,$label,$bg,$icon])
+        <div class="stat-card"><div class="stat-icon" style="background:{{ $bg }}"><i class="bi {{ $icon }}"></i></div><div class="stat-number">{{ $key === 'transactions' ? $treasury[$key] : $money($treasury[$key]) }}</div><div class="stat-text">{{ $label }}</div></div>
         @endforeach
     </div>
-    <div class="section-title">🧮 {{ __('Accounting') }}</div>
+    <div class="section-title">{{ __('Accounting') }}</div>
     <div class="row g-5 mb-5">
         <div class="col-xl-8"><div class="dash-card"><h3>{{ __('Revenue vs expenses') }}</h3><div class="chart"><canvas id="revenueExpenseChart"></canvas></div></div></div>
         <div class="col-xl-4">

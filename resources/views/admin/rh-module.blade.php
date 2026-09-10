@@ -30,7 +30,7 @@
         @endif
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-4">
             <div class="d-flex align-items-center gap-3">
-                <span class="fs-1">{{ $module['icon'] }}</span>
+                <span class="fs-1"><i class="bi {{ $module['icon'] }}"></i></span>
                 <div>
                     <div class="text-uppercase text-muted fs-8 fw-bold">RH &amp; Paie</div>
                     <h2 class="fs-2 fw-bold text-dark mb-1">{{ $module['title'] }}</h2>
@@ -50,7 +50,7 @@
                 <a href="{{ route('admin.departments.index') }}" class="btn btn-light-primary btn-sm">Gérer les services</a>
                 <div class="dropdown">
                     <button type="button" class="btn btn-light-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                        <span class="me-1">▦</span> Colonnes
+                        <i class="bi bi-layout-three-columns me-1"></i> Colonnes
                     </button>
                     <div class="dropdown-menu dropdown-menu-end employee-columns-menu p-0" data-employee-columns-menu>
                         <div class="px-4 py-3 border-bottom fw-bold">Afficher les colonnes</div>

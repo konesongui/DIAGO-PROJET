@@ -76,6 +76,7 @@
         .app-content .text-muted { color: var(--diagoma-muted) !important; }
         .menu-icon, .header-actions .btn-icon, .app-content .bi, .app-content .fa,
         .app-content svg { color: var(--diagoma-icon); }
+        .app-content :is(.module-icon, .landing-stat-icon, .rh-icon, .admin-icon, .finance-kpi .icon) > .bi { color: inherit; }
         [data-theme-flat="1"] .app-sidebar,
         [data-theme-flat="1"] .app-sidebar-header .logo-icon,
         [data-theme-flat="1"] .user-avatar,
@@ -1035,7 +1036,7 @@
 
                         <!--<div class="menu-item {{ request()->routeIs('admin.hub') ? 'active' : '' }}">
                             <a href="{{ route('admin.hub') }}" class="menu-link">
-                                <span class="menu-icon">⚙️</span>
+                                <span class="menu-icon"><i class="bi bi-gear"></i></span>
                                 <span class="menu-title">Administration</span>
                             </a>
                         </div>-->
@@ -1044,19 +1045,19 @@
                         <div class="menu-section">{{ __('Console') }}</div>
                         <div class="menu-item {{ request()->routeIs('console.index', 'console.dashboard') ? 'active' : '' }}">
                             <a href="{{ route('console.index') }}" class="menu-link">
-                                <span class="menu-icon">📊</span>
+                                <span class="menu-icon"><i class="bi bi-speedometer2"></i></span>
                                 <span class="menu-title">Dashboard</span>
                             </a>
                         </div>
                         <div class="menu-item {{ request()->routeIs('console.account-tracking') ? 'active' : '' }}">
                             <a href="{{ route('console.account-tracking') }}" class="menu-link">
-                                <span class="menu-icon">📋</span>
+                                <span class="menu-icon"><i class="bi bi-clipboard-data"></i></span>
                                 <span class="menu-title">{{ __('Account tracking') }}</span>
                             </a>
                         </div>
                         <div class="menu-item {{ request()->routeIs('console.pack-requests') ? 'active' : '' }}">
                             <a href="{{ route('console.pack-requests') }}" class="menu-link">
-                                <span class="menu-icon">📦</span>
+                                <span class="menu-icon"><i class="bi bi-box-seam"></i></span>
                                 <span class="menu-title">Demandes de packs</span>
                             </a>
                         </div>
@@ -1066,7 +1067,7 @@
                         @if(auth()->user()->hasPermission('dashboard'))
                         <div class="menu-item {{ request()->routeIs('admin.dashboard', 'dashboard') ? 'active' : '' }}">
                             <a href="{{ route('admin.dashboard') }}" class="menu-link">
-                                <span class="menu-icon">📊</span>
+                                <span class="menu-icon"><i class="bi bi-speedometer2"></i></span>
                                 <span class="menu-title">Dashboard</span>
                             </a>
                         </div>
@@ -1074,7 +1075,7 @@
                         @if(data_get(auth()->user()->entreprise?->settings, 'ai_assistant_enabled', false))
                         <div class="menu-item {{ request()->routeIs('admin.ai-assistant*') ? 'active' : '' }}">
                             <a href="{{ route('admin.ai-assistant') }}" class="menu-link">
-                                <span class="menu-icon">🤖</span>
+                                <span class="menu-icon"><i class="bi bi-robot"></i></span>
                                 <span class="menu-title">Assistant IA</span>
                             </a>
                         </div>
@@ -1082,7 +1083,7 @@
                         @if(!empty($enabledRubriques['administration']) && auth()->user()->hasPermission('administration'))
                         <div class="menu-item {{ request()->routeIs('admin.administration*') ? 'active' : '' }}">
                             <a href="{{ route('admin.administration') }}" class="menu-link">
-                                <span class="menu-icon">🗂️</span>
+                                <span class="menu-icon"><i class="bi bi-folder2-open"></i></span>
                                 <span class="menu-title">{{ __('Administrative management') }}</span>
                             </a>
                         </div>
@@ -1092,7 +1093,7 @@
                         @if(!empty($enabledRubriques['comptabilite']) && auth()->user()->hasPermission('accounting'))
                         <div class="menu-item {{ request()->routeIs('admin.comptabilite*') ? 'active' : '' }}">
                             <a href="{{ route('admin.comptabilite') }}" class="menu-link">
-                                <span class="menu-icon">💳</span>
+                                <span class="menu-icon"><i class="bi bi-calculator"></i></span>
                                 <span class="menu-title">{{ __('Accounting') }}</span>
                                 <span class="menu-badge"></span>
                             </a>
@@ -1103,7 +1104,7 @@
                         @if(!empty($enabledRubriques['rh']) && auth()->user()->hasPermission('hr'))
                         <div class="menu-item {{ request()->routeIs('admin.rh') ? 'active' : '' }}">
                             <a href="{{ route('admin.rh') }}" class="menu-link">
-                                <span class="menu-icon">👥</span>
+                                <span class="menu-icon"><i class="bi bi-people"></i></span>
                                 <span class="menu-title">{{ __('HR & Paie') }}</span>
                             </a>
                         </div>
@@ -1112,7 +1113,7 @@
                         @if(!empty($enabledRubriques['commercial']) && auth()->user()->hasPermission('commercial'))
                         <div class="menu-item {{ request()->routeIs('admin.commercial*') ? 'active' : '' }}">
                             <a href="{{ route('admin.commercial') }}" class="menu-link">
-                                <span class="menu-icon">📊</span>
+                                <span class="menu-icon"><i class="bi bi-graph-up-arrow"></i></span>
                                 <span class="menu-title">{{ __('Commercial') }}</span>
                                 <span class="menu-badge"></span>
                             </a>
@@ -1121,7 +1122,7 @@
                         @if(!empty($enabledRubriques['succursales']) && auth()->user()->hasPermission('succursales'))
                         <div class="menu-item {{ request()->routeIs('admin.succursales*') ? 'active' : '' }}">
                             <a href="{{ route('admin.succursales.index') }}" class="menu-link">
-                                <span class="menu-icon">🏬</span>
+                                <span class="menu-icon"><i class="bi bi-shop"></i></span>
                                 <span class="menu-title">{{ __('Branches') }}</span>
                             </a>
                         </div>
@@ -1131,7 +1132,7 @@
                         @if(auth()->user()->hasRole('super_admin'))
                         <div class="menu-item {{ request()->routeIs('admin.demorequests') ? 'active' : '' }}">
                             <a href="{{ route('admin.demorequests') }}" class="menu-link">
-                                <span class="menu-icon">💬</span>
+                                <span class="menu-icon"><i class="bi bi-chat-dots"></i></span>
                                 <span class="menu-title">{{ __('Demo requests') }}</span>
                             </a>
                         </div>
@@ -1142,7 +1143,7 @@
                         @if(!auth()->user()->hasRole('super_admin') && auth()->user()->hasPermission('users'))
                         <div class="menu-item {{ request()->routeIs('admin.users*') ? 'active' : '' }}">
                             <a href="{{ route('admin.users.index') }}" class="menu-link">
-                                <span class="menu-icon">👤</span>
+                                <span class="menu-icon"><i class="bi bi-person"></i></span>
                                 <span class="menu-title">{{ __('Users') }}</span>
                             </a>
                         </div>
@@ -1151,7 +1152,7 @@
                         @if(auth()->user()->hasPermission('settings'))
                         <div class="menu-item {{ request()->routeIs('admin.settings*') ? 'active' : '' }}">
                             <a href="{{ route('admin.settings') }}" class="menu-link">
-                                <span class="menu-icon">🔧</span>
+                                <span class="menu-icon"><i class="bi bi-sliders"></i></span>
                                 <span class="menu-title">{{ __('Settings') }}</span>
                             </a>
                         </div>
@@ -1164,7 +1165,7 @@
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
                         <button type="submit" class="btn-logout">
-                            <span>🚪</span>
+                            <i class="bi bi-box-arrow-right"></i>
                             Déconnexion
                         </button>
                     </form>
@@ -1191,7 +1192,7 @@
 
                         <!-- Search centered in the header -->
                         <div class="topbar-search d-flex align-items-center position-relative" id="employee-search">
-                            <span style="color:#8e96a8;">🔍</span>
+                            <i class="bi bi-search" style="color:#8e96a8;"></i>
                             <input type="search" id="employee-search-input" placeholder="{{ __('Search an employee...') }}" autocomplete="off" aria-label="{{ __('Search an employee...') }}" />
                             <span class="text-muted fs-8" style="cursor:pointer;">⌘K</span>
                             <div class="employee-search-results" id="employee-search-results"></div>
@@ -1201,17 +1202,17 @@
                         <div class="d-flex align-items-center ms-auto gap-2 header-actions">
                             <!-- Language and notifications near the profile -->
                             <div class="dropdown">
-                                <button class="btn btn-icon btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{ __('Choose language') }}">🌐</button>
+                                <button class="btn btn-icon btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{ __('Choose language') }}"><i class="bi bi-globe"></i></button>
                                 <ul class="dropdown-menu dropdown-menu-end header-language-menu">
                                     @php($currentLocale = app()->getLocale())
-                                    <li><form method="POST" action="{{ route('locale.update') }}">@csrf<input type="hidden" name="locale" value="fr"><button class="dropdown-item {{ $currentLocale === 'fr' ? 'active' : '' }}" type="submit">🇫🇷 Français</button></form></li>
-                                    <li><form method="POST" action="{{ route('locale.update') }}">@csrf<input type="hidden" name="locale" value="en"><button class="dropdown-item {{ $currentLocale === 'en' ? 'active' : '' }}" type="submit">🇬🇧 English</button></form></li>
+                                    <li><form method="POST" action="{{ route('locale.update') }}">@csrf<input type="hidden" name="locale" value="fr"><button class="dropdown-item {{ $currentLocale === 'fr' ? 'active' : '' }}" type="submit">Français</button></form></li>
+                                    <li><form method="POST" action="{{ route('locale.update') }}">@csrf<input type="hidden" name="locale" value="en"><button class="dropdown-item {{ $currentLocale === 'en' ? 'active' : '' }}" type="submit">English</button></form></li>
                                 </ul>
                             </div>
 
                             <div class="dropdown">
                                 <button class="btn btn-icon btn-sm position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Notifications">
-                                    🔔
+                                    <i class="bi bi-bell"></i>
                                     @if(($notificationCount ?? 0) > 0)
                                         <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:9px; padding:0.2rem 0.4rem;">{{ $notificationCount ?? 0 }}</span>
                                     @endif
@@ -1219,21 +1220,21 @@
                                 <div class="dropdown-menu dropdown-menu-end header-notification-menu">
                                     <div class="px-2 py-2 border-bottom fw-bold">{{ __('Notifications') }}</div>
                                     <a href="{{ route('admin.rh.permissions') }}" class="notification-item">
-                                        <span class="me-2">📝</span>{{ $pendingPermissions ?? 0 }} {{ __('Pending permission request(s)') }}
+                                        <i class="bi bi-pencil-square me-2"></i>{{ $pendingPermissions ?? 0 }} {{ __('Pending permission request(s)') }}
                                     </a>
                                     <a href="{{ route('admin.rh.leaves') }}" class="notification-item">
-                                        <span class="me-2">🗓️</span>{{ $pendingLeaves ?? 0 }} {{ __('Pending leave request(s)') }}
+                                        <i class="bi bi-calendar-range me-2"></i>{{ $pendingLeaves ?? 0 }} {{ __('Pending leave request(s)') }}
                                     </a>
                                     @foreach(($stockAlerts ?? collect()) as $stockAlert)
                                         <a href="{{ route('admin.commercial.module', 'etat-stock') }}" class="notification-item">
-                                            <span class="me-2">{{ $stockAlert['quantity'] <= 0 ? '🚨' : '⚠️' }}</span>
+                                            <i class="bi {{ $stockAlert['quantity'] <= 0 ? 'bi-x-octagon text-danger' : 'bi-exclamation-triangle text-warning' }} me-2"></i>
                                             <strong>{{ $stockAlert['name'] }}</strong>
                                             <span class="d-block small text-muted ms-4">{{ $stockAlert['quantity'] <= 0 ? 'Rupture de stock' : 'Stock faible' }} · {{ number_format(max(0, $stockAlert['quantity']), 2, ',', ' ') }} {{ $stockAlert['unit'] }}</span>
                                         </a>
                                     @endforeach
                                     @if($pendingAnnualReport ?? null)
                                         <a href="{{ route('admin.bilans.show', $pendingAnnualReport) }}" class="notification-item">
-                                            <span class="me-2">📊</span>
+                                            <i class="bi bi-file-earmark-bar-graph me-2"></i>
                                             <strong>{{ $pendingAnnualReport->label() }}</strong>
                                             <span class="d-block small text-muted ms-4">Exercice clos, bilan non téléchargé</span>
                                         </a>
@@ -1261,11 +1262,11 @@
                                         <div class="fw-bold">{{ auth()->user()->name ?? 'Administrateur' }}</div>
                                         <div class="text-muted fs-8">{{ auth()->user()->email ?? '' }}</div>
                                     </li>
-                                    <li><a class="dropdown-item" href="{{ route('admin.profile') }}"><span class="me-2">👤</span>Profil</a></li>
+                                    <li><a class="dropdown-item" href="{{ route('admin.profile') }}"><i class="bi bi-person me-2"></i>Profil</a></li>
                                     <li>
                                         <form method="POST" action="{{ route('logout') }}">
                                             @csrf
-                                            <button type="submit" class="dropdown-item text-danger"><span class="me-2">🚪</span>Se déconnecter</button>
+                                            <button type="submit" class="dropdown-item text-danger"><i class="bi bi-box-arrow-right me-2"></i>Se déconnecter</button>
                                         </form>
                                     </li>
                                 </ul>
@@ -1597,7 +1598,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <div>
-                    <h5 class="modal-title">📊 {{ $ar->label() }}</h5>
+                    <h5 class="modal-title">{{ $ar->label() }}</h5>
                     <div class="text-muted small">Exercice du {{ \Carbon\Carbon::parse($arData['from'])->format('d/m/Y') }}
                         au {{ \Carbon\Carbon::parse($arData['to'])->format('d/m/Y') }}</div>
                 </div>

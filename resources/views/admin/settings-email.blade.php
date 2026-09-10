@@ -5,7 +5,7 @@
 <div class="settings-panel">
     <div class="panel-body">
         <div class="d-flex align-items-center gap-3 mb-4">
-            <span class="fs-1">{{ $module['icon'] }}</span>
+            <span class="fs-1"><i class="bi {{ $module['icon'] }}"></i></span>
             <div>
                 <div class="text-uppercase text-muted fs-8 fw-bold">{{ $module['category'] }}</div>
                 <h2 class="h4 fw-bold text-dark mb-0">{{ $module['title'] }}</h2>

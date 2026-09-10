@@ -109,7 +109,7 @@
 
     <div class="card fiscal-card">
         <div class="card-body d-flex gap-4">
-            <div class="fs-2">💡</div>
+            <div class="fs-2"><i class="bi bi-lightbulb"></i></div>
             <div class="text-muted fs-7">
                 <p class="mb-2">Le taux marqué <strong>par défaut</strong> est celui proposé à la saisie d'un devis ou d'une facture. Un seul taux peut l'être à la fois.</p>
                 <p class="mb-2">La <strong>date d'entrée en vigueur</strong> sert lorsqu'un taux change : les documents émis avant cette date conservent l'ancien taux, même réédités plus tard.</p>

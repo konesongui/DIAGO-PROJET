@@ -42,6 +42,14 @@ class LandingSetting extends Model
             }
         }
 
+        $defaultModules = static::defaultSettings()['modules'];
+
+        foreach (($settings['modules'] ?? []) as $index => $module) {
+            if (! str_starts_with((string) ($module['icon'] ?? ''), 'bi-')) {
+                $settings['modules'][$index]['icon'] = $defaultModules[$index]['icon'] ?? 'bi-grid';
+            }
+        }
+
         return $settings;
     }
 
@@ -99,12 +107,12 @@ class LandingSetting extends Model
                 ],
             ],
             'modules' => [
-                ['title' => 'Finance', 'icon' => '💰', 'description' => 'Comptabilité, caisse, banques, rapports et trésorerie centralisée.'],
-                ['title' => 'RH', 'icon' => '👥', 'description' => 'Gestion du personnel, congés, paie, présences et attendances.'],
-                ['title' => 'Commercial', 'icon' => '📦', 'description' => 'Devis, factures, stock, clients, fournisseurs et ventes.'],
-                ['title' => 'Administration', 'icon' => '🏢', 'description' => 'Visiteurs, appels, courriers, réunions et documents.'],
-                ['title' => 'Succursales', 'icon' => '🧭', 'description' => 'Multi-entreprise, filiales et organisation territoriale.'],
-                ['title' => 'Reporting', 'icon' => '📊', 'description' => 'KPI, tableaux de bord, suivi et pilotage en temps réel.'],
+                ['title' => 'Finance', 'icon' => 'bi-cash-coin', 'description' => 'Comptabilité, caisse, banques, rapports et trésorerie centralisée.'],
+                ['title' => 'RH', 'icon' => 'bi-people', 'description' => 'Gestion du personnel, congés, paie, présences et attendances.'],
+                ['title' => 'Commercial', 'icon' => 'bi-box-seam', 'description' => 'Devis, factures, stock, clients, fournisseurs et ventes.'],
+                ['title' => 'Administration', 'icon' => 'bi-building', 'description' => 'Visiteurs, appels, courriers, réunions et documents.'],
+                ['title' => 'Succursales', 'icon' => 'bi-compass', 'description' => 'Multi-entreprise, filiales et organisation territoriale.'],
+                ['title' => 'Reporting', 'icon' => 'bi-bar-chart', 'description' => 'KPI, tableaux de bord, suivi et pilotage en temps réel.'],
             ],
             'packs' => [
                 ['name' => 'Starter', 'price' => '29', 'currency' => '€', 'description' => 'Pour les petites structures.', 'features' => ['1 entreprise', '3 utilisateurs', 'Modules de base', 'Support email']],

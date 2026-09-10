@@ -8,7 +8,7 @@
 <div class="card border-0 overflow-hidden mb-5">
     <div class="card-body p-5 p-lg-8"><div class="d-flex flex-wrap align-items-center gap-5">
         <div class="position-relative"><img src="{{ $user->avatar_path ? asset('storage/' . $user->avatar_path) : asset('assets/media/avatars/300-1.jpg') }}" alt="Photo de profil" class="rounded-3" style="width:150px;height:150px;object-fit:cover;"><span class="position-absolute bottom-0 end-0 bg-success border border-3 border-white rounded-circle" style="width:20px;height:20px;"></span></div>
-        <div class="flex-grow-1"><h2 class="mb-2">{{ $user->name }}</h2><div class="text-muted mb-1">👤 {{ $user->role?->label ?? 'Administrateur' }}</div><div class="text-muted mb-1">✉️ {{ $user->email }}</div><div class="text-muted">📞 {{ $user->phone ?: 'Téléphone non renseigné' }}</div></div>
+        <div class="flex-grow-1"><h2 class="mb-2">{{ $user->name }}</h2><div class="text-muted mb-1"><i class="bi bi-person me-2"></i>{{ $user->role?->label ?? 'Administrateur' }}</div><div class="text-muted mb-1"><i class="bi bi-envelope me-2"></i>{{ $user->email }}</div><div class="text-muted"><i class="bi bi-telephone me-2"></i>{{ $user->phone ?: 'Téléphone non renseigné' }}</div></div>
         <div class="text-muted text-end"><div class="fs-2 fw-bold text-primary">{{ $user->matricule ?: '9000' }}</div><div>Matricule</div></div>
     </div></div>
     <div class="card-footer p-0 border-top"><ul class="nav nav-tabs nav-line-tabs nav-stretch fs-6 fw-semibold px-4" id="profileTabs">

@@ -205,7 +205,7 @@
                 <div class="eyebrow">Espace démo</div>
                 <h1>Bienvenue dans votre environnement de démonstration</h1>
                 <p class="muted">Vous avez un accès temporaire à une version fonctionnelle de l’ERP. Explorez les modules clés du système avant de passer à un plan définitif.</p>
-                <div class="badge">✅ Accès activé pour {{ $demoEmail }}</div>
+                <div class="badge"><i class="bi bi-check-circle me-1"></i>Accès activé pour {{ $demoEmail }}</div>
 
                 <div class="module-list">
                     @foreach($modules as $module)

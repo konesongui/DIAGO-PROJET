@@ -700,7 +700,7 @@
                     </div>
                     <div class="trust-row">
                         @foreach(($stats ?? []) as $stat)
-                            <span>✅ {{ $stat['value'] ?? '' }} {{ $stat['label'] ?? '' }}</span>
+                            <span><i class="bi bi-check-circle me-1"></i>{{ $stat['value'] ?? '' }} {{ $stat['label'] ?? '' }}</span>
                         @endforeach
                     </div>
                 </div>
@@ -735,7 +735,7 @@
                 <div class="module-grid">
                     @foreach($modules as $module)
                         <article class="module-card">
-                            <div class="module-icon">{{ $module['icon'] }}</div>
+                            <div class="module-icon"><i class="bi {{ $module['icon'] }}"></i></div>
                             <h3>{{ $module['title'] }}</h3>
                             <p>{{ $module['description'] }}</p>
                         </article>

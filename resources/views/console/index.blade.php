@@ -13,8 +13,8 @@
 </div>
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
 <div class="row g-4 mb-4">
-    @foreach([['🏢',$entreprises->count(),'Entreprises','#e8f2ff'],['✅',$activeEntreprises,'Comptes actifs','#e8f8ef'],['⛔',$inactiveEntreprises,'Comptes désactivés','#fff0f0'],['⏳',$expiringEntreprises->count(),'Expirent sous 30 jours','#fff7df'],['⚠️',$expiredEntreprises->count(),'Abonnements expirés','#ffe8e8'],['👥',$activeUsers,'Utilisateurs actifs','#eeeaff'],['🚫',$inactiveUsers,'Utilisateurs désactivés','#f1f1f1'],['🔐',$superAdmins,'Super administrateurs','#e8f2ff'],['📈',$activationRate.'%','Taux d’activation','#e8f8ef']] as [$icon,$value,$label,$color])
-    <div class="col-xl-3 col-md-6"><div class="console-metric bg-white p-4 d-flex align-items-center gap-3"><div class="metric-icon" style="background:{{ $color }}">{{ $icon }}</div><div><div class="metric-value">{{ $value }}</div><div class="text-muted mt-1">{{ $label }}</div></div></div></div>
+    @foreach([['bi-building',$entreprises->count(),'Entreprises','#e8f2ff'],['bi-check-circle',$activeEntreprises,'Comptes actifs','#e8f8ef'],['bi-slash-circle',$inactiveEntreprises,'Comptes désactivés','#fff0f0'],['bi-hourglass-split',$expiringEntreprises->count(),'Expirent sous 30 jours','#fff7df'],['bi-exclamation-triangle',$expiredEntreprises->count(),'Abonnements expirés','#ffe8e8'],['bi-people',$activeUsers,'Utilisateurs actifs','#eeeaff'],['bi-person-x',$inactiveUsers,'Utilisateurs désactivés','#f1f1f1'],['bi-shield-lock',$superAdmins,'Super administrateurs','#e8f2ff'],['bi-graph-up',$activationRate.'%','Taux d’activation','#e8f8ef']] as [$icon,$value,$label,$color])
+    <div class="col-xl-3 col-md-6"><div class="console-metric bg-white p-4 d-flex align-items-center gap-3"><div class="metric-icon" style="background:{{ $color }}"><i class="bi {{ $icon }}"></i></div><div><div class="metric-value">{{ $value }}</div><div class="text-muted mt-1">{{ $label }}</div></div></div></div>
     @endforeach
 </div>
 <div class="row g-4 mb-4">

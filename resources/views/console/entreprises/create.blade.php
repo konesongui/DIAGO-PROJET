@@ -21,7 +21,7 @@
         <p class="text-muted">Sélectionnez les rubriques qui seront visibles dans cet espace.</p>
         <div class="row g-3">
             @foreach($moduleRubriques as $key => $rubrique)
-                <div class="col-md-6 col-xl-4"><label class="border rounded-3 p-3 d-flex gap-3 align-items-start h-100"><input class="form-check-input mt-1" type="checkbox" name="rubriques[{{ $key }}]" value="1" {{ old("rubriques.$key") ? 'checked' : '' }}><span><strong>{{ $rubrique['icon'] }} {{ $rubrique['label'] }}</strong><small class="d-block text-muted mt-1">{{ $rubrique['description'] }}</small></span></label></div>
+                <div class="col-md-6 col-xl-4"><label class="border rounded-3 p-3 d-flex gap-3 align-items-start h-100"><input class="form-check-input mt-1" type="checkbox" name="rubriques[{{ $key }}]" value="1" {{ old("rubriques.$key") ? 'checked' : '' }}><span><strong><i class="bi {{ $rubrique['icon'] }} me-1"></i>{{ $rubrique['label'] }}</strong><small class="d-block text-muted mt-1">{{ $rubrique['description'] }}</small></span></label></div>
             @endforeach
         </div>
         <div class="form-check form-switch border rounded-3 p-3 mt-4">

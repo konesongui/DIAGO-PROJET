@@ -134,7 +134,7 @@
                     <span class="rh-badge">Module RH</span>
                     <span class="rh-status">Disponible</span>
                 </div>
-                <div class="rh-icon">{{ $module['icon'] }}</div>
+                <div class="rh-icon"><i class="bi {{ $module['icon'] }}"></i></div>
                 <h3 class="rh-title">{{ $module['title'] }}</h3>
                 <p class="rh-description">{{ $module['description'] }}</p>
                 <div class="rh-footer">

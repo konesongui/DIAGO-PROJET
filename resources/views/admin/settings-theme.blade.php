@@ -16,7 +16,7 @@
 <div class="theme-shell">
     <div class="theme-card p-4 p-md-5">
         <div class="d-flex align-items-center gap-3 mb-2">
-            <span class="fs-1">🎨</span>
+            <i class="bi bi-palette fs-1"></i>
             <div><div class="text-uppercase text-muted fs-8 fw-bold">Apparence</div><h2 class="h4 fw-bold text-dark mb-0">Thème de couleurs</h2></div>
         </div>
         <p class="text-muted mb-4">Choisissez la couleur principale de votre espace. La préférence est appliquée à tous les utilisateurs de votre entreprise.</p>

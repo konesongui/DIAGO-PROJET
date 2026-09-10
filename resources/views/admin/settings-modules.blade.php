@@ -21,7 +21,7 @@
                         <label class="card border h-100 p-4 cursor-pointer">
                             <div class="d-flex justify-content-between align-items-start gap-3">
                                 <div>
-                                    <div class="fs-2 mb-2">{{ $rubrique['icon'] }}</div>
+                                    <div class="fs-2 mb-2"><i class="bi {{ $rubrique['icon'] }}"></i></div>
                                     <h3 class="h5 fw-bold mb-2">{{ $rubrique['label'] }}</h3>
                                     <p class="text-muted mb-0">{{ $rubrique['description'] }}</p>
                                 </div>

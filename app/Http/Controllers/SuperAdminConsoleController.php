@@ -345,12 +345,12 @@ class SuperAdminConsoleController extends Controller
     private function moduleRubriques(): array
     {
         return [
-            'pilotage' => ['label' => 'Pilotage', 'description' => 'Tableau de bord et rapports de pilotage.', 'icon' => '📊'],
-            'commercial' => ['label' => 'Commercial', 'description' => 'Clients, ventes, stocks et point de vente.', 'icon' => '🛒'],
-            'comptabilite' => ['label' => 'Comptabilité', 'description' => 'Caisses, banques et rapports comptables.', 'icon' => '💳'],
-            'rh' => ['label' => 'RH & Paie', 'description' => 'Employés, services, fonctions et paie.', 'icon' => '👥'],
-            'administration' => ['label' => 'Administration', 'description' => 'Administration et paramétrage de l’entreprise.', 'icon' => '⚙️'],
-            'succursales' => ['label' => 'Succursales', 'description' => 'Gérez les établissements et suivez leur activité.', 'icon' => '🏬'],
+            'pilotage' => ['label' => 'Pilotage', 'description' => 'Tableau de bord et rapports de pilotage.', 'icon' => 'bi-bar-chart'],
+            'commercial' => ['label' => 'Commercial', 'description' => 'Clients, ventes, stocks et point de vente.', 'icon' => 'bi-cart'],
+            'comptabilite' => ['label' => 'Comptabilité', 'description' => 'Caisses, banques et rapports comptables.', 'icon' => 'bi-credit-card'],
+            'rh' => ['label' => 'RH & Paie', 'description' => 'Employés, services, fonctions et paie.', 'icon' => 'bi-people'],
+            'administration' => ['label' => 'Administration', 'description' => 'Administration et paramétrage de l’entreprise.', 'icon' => 'bi-gear'],
+            'succursales' => ['label' => 'Succursales', 'description' => 'Gérez les établissements et suivez leur activité.', 'icon' => 'bi-shop'],
         ];
     }
 

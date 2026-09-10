@@ -26,18 +26,18 @@ class RhController extends AdminController
     private function modules(): array
     {
         return [
-            'tableau-rh' => ['title' => 'Tableau RH', 'description' => 'Vue d’ensemble du personnel, des congés et de la paie.', 'icon' => '📊', 'url' => route('admin.rh')],
-            'personnel' => ['title' => 'Liste du personnel', 'description' => 'Fiches et informations des employés.', 'icon' => '👥'],
-            'qr-code' => ['title' => 'Afficher QR Code', 'description' => 'QR pour pointage à l’entrée.', 'icon' => '▣'],
-            'presences' => ['title' => 'Présences du jour', 'description' => 'Suivi des présences et absences du jour.', 'icon' => '✅'],
-            'rapport-presence' => ['title' => 'Rapport Présence', 'description' => 'Rapports et statistiques QR.', 'icon' => '📈'],
-            'bulletins-paie' => ['title' => 'Bulletin de paie', 'description' => 'Gestion des paies et bulletins.', 'icon' => '🧾'],
-            'livre-paie' => ['title' => 'Livre de paie', 'description' => 'Registre des paies de l’entreprise.', 'icon' => '📚'],
-            'categories-salariales' => ['title' => 'Catégorie salariale', 'description' => 'Gestion des catégories salariales.', 'icon' => '🏷️'],
-            'parametrage-conges' => ['title' => 'Paramétrage de congé', 'description' => 'Configurez les règles de congés.', 'icon' => '⚙️'],
-            'conges' => ['title' => 'Liste des congés', 'description' => 'Validation des demandes de congés.', 'icon' => '🗓️'],
-            'calendrier-conges' => ['title' => 'Calendrier des congés', 'description' => 'Visualisation globale des congés.', 'icon' => '📅'],
-            'permissions' => ['title' => 'Demande de permission', 'description' => 'Gérez les demandes de permission.', 'icon' => '📝'],
+            'tableau-rh' => ['title' => 'Tableau RH', 'description' => 'Vue d’ensemble du personnel, des congés et de la paie.', 'icon' => 'bi-bar-chart', 'url' => route('admin.rh')],
+            'personnel' => ['title' => 'Liste du personnel', 'description' => 'Fiches et informations des employés.', 'icon' => 'bi-people'],
+            'qr-code' => ['title' => 'Afficher QR Code', 'description' => 'QR pour pointage à l’entrée.', 'icon' => 'bi-qr-code'],
+            'presences' => ['title' => 'Présences du jour', 'description' => 'Suivi des présences et absences du jour.', 'icon' => 'bi-check2-circle'],
+            'rapport-presence' => ['title' => 'Rapport Présence', 'description' => 'Rapports et statistiques QR.', 'icon' => 'bi-graph-up'],
+            'bulletins-paie' => ['title' => 'Bulletin de paie', 'description' => 'Gestion des paies et bulletins.', 'icon' => 'bi-receipt'],
+            'livre-paie' => ['title' => 'Livre de paie', 'description' => 'Registre des paies de l’entreprise.', 'icon' => 'bi-journal-text'],
+            'categories-salariales' => ['title' => 'Catégorie salariale', 'description' => 'Gestion des catégories salariales.', 'icon' => 'bi-tag'],
+            'parametrage-conges' => ['title' => 'Paramétrage de congé', 'description' => 'Configurez les règles de congés.', 'icon' => 'bi-gear'],
+            'conges' => ['title' => 'Liste des congés', 'description' => 'Validation des demandes de congés.', 'icon' => 'bi-calendar-range'],
+            'calendrier-conges' => ['title' => 'Calendrier des congés', 'description' => 'Visualisation globale des congés.', 'icon' => 'bi-calendar3'],
+            'permissions' => ['title' => 'Demande de permission', 'description' => 'Gérez les demandes de permission.', 'icon' => 'bi-pencil-square'],
         ];
     }
 
