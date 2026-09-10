@@ -24,6 +24,7 @@
             @csrf @method('PATCH')
             <div class="row g-3">
                 @foreach([
+                    'diago' => ['Diago (charte CME)', '#273772', '#1f2d61', 'Bleu marine et jaune, charte officielle'],
                     'ocean' => ['Bleu océan', '#4d68ff', '#293fba', 'Classique et professionnel'],
                     'emerald' => ['Émeraude', '#0f9f78', '#08785c', 'Frais et dynamique'],
                     'royal' => ['Violet royal', '#7048e8', '#4c2aa6', 'Élégant et premium'],
@@ -53,6 +54,7 @@
 </div>
 <script>
 const themeColors = {
+    diago: ['#273772', '#1f2d61', '#fadf2f', false],
     ocean: ['#4d68ff', '#293fba', '#8fa5ff', false],
     emerald: ['#0f9f78', '#08785c', '#62d8b5', false],
     royal: ['#7048e8', '#4c2aa6', '#b39bff', false],

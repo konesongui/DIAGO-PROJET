@@ -106,8 +106,8 @@ class SettingController extends AdminController
 
         if ($module === 'theme') {
             $theme = auth()->user()->entreprise
-                ? data_get(auth()->user()->entreprise->settings, 'theme', 'ocean')
-                : session('console_theme', 'ocean');
+                ? data_get(auth()->user()->entreprise->settings, 'theme', 'diago')
+                : session('console_theme', 'diago');
 
             return $this->page('settings-theme', [
                 'title' => $modules[$module]['title'],
@@ -287,7 +287,7 @@ class SettingController extends AdminController
     public function updateTheme(Request $request)
     {
         $validated = $request->validate([
-            'theme' => ['required', 'in:ocean,emerald,royal,amber,slate,midnight,coral,lavender,teal,graphite,ruby,forest,sand,metronic_black'],
+            'theme' => ['required', 'in:diago,ocean,emerald,royal,amber,slate,midnight,coral,lavender,teal,graphite,ruby,forest,sand,metronic_black'],
         ]);
 
         if ($entreprise = auth()->user()->entreprise) {

@@ -3,14 +3,15 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{ $title ?? 'Diagoma ERP' }}</title>
-    <meta name="description" content="Diagoma ERP" />
+    <title>{{ $title ?? 'Diago ERP' }}</title>
+    <meta name="description" content="Diago ERP" />
     @php
         $browserLogo = data_get(auth()->user()->entreprise?->settings ?? [], 'logo');
         $appTheme = auth()->user()->entreprise
-            ? data_get(auth()->user()->entreprise->settings ?? [], 'theme', 'ocean')
-            : session('console_theme', 'ocean');
+            ? data_get(auth()->user()->entreprise->settings ?? [], 'theme', 'diago')
+            : session('console_theme', 'diago');
         $themePalettes = [
+            'diago' => ['primary' => '#273772', 'dark' => '#1f2d61', 'accent' => '#fadf2f', 'header' => '#ffffff', 'surface' => '#f4f6fb', 'text' => '#172033', 'muted' => '#5b6478', 'button' => '#ffffff', 'icon' => '#273772', 'sidebar' => '#273772', 'highlight' => '#fadf2f'],
             'ocean' => ['primary' => '#4d68ff', 'dark' => '#293fba', 'accent' => '#8fa5ff', 'header' => '#ffffff', 'surface' => '#f3f6fb', 'text' => '#172b4d', 'muted' => '#8291a8', 'button' => '#ffffff'],
             'emerald' => ['primary' => '#0f9f78', 'dark' => '#08785c', 'accent' => '#62d8b5', 'header' => '#fafffd', 'surface' => '#f1faf7', 'text' => '#123b35', 'muted' => '#6c9189', 'button' => '#ffffff'],
             'royal' => ['primary' => '#7048e8', 'dark' => '#4c2aa6', 'accent' => '#b39bff', 'header' => '#fcfaff', 'surface' => '#f6f3ff', 'text' => '#2d2055', 'muted' => '#887ba9', 'button' => '#ffffff'],
@@ -26,11 +27,16 @@
             'sand' => ['primary' => '#b7791f', 'dark' => '#805516', 'accent' => '#f0c674', 'header' => '#fffdf8', 'surface' => '#fdf8ed', 'text' => '#4a3519', 'muted' => '#9a815c', 'button' => '#ffffff', 'icon' => '#a56819', 'flat' => true],
             'metronic_black' => ['primary' => '#00a3ff', 'dark' => '#07111f', 'accent' => '#7dd3fc', 'header' => '#15171c', 'surface' => '#0d0f12', 'text' => '#f1f5f9', 'muted' => '#94a3b8', 'button' => '#ffffff', 'icon' => '#7dd3fc', 'flat' => true, 'dark_mode' => true],
         ];
-        $activePalette = $themePalettes[$appTheme] ?? $themePalettes['ocean'];
+        $activePalette = $themePalettes[$appTheme] ?? $themePalettes['diago'];
+        // Barre latérale : couleur dédiée du thème, sinon couleur principale (thèmes « flat ») ou foncée.
+        $sidebarBackground = $activePalette['sidebar'] ?? (!empty($activePalette['flat']) ? $activePalette['primary'] : $activePalette['dark']);
+        $sidebarAccent = $activePalette['highlight'] ?? $activePalette['accent'];
     @endphp
     <link rel="icon" type="image/png" href="{{ $browserLogo ? asset('storage/' . ltrim($browserLogo, '/')) : asset('assets/media/logos/favicon.ico') }}" />
     <link rel="shortcut icon" href="{{ $browserLogo ? asset('storage/' . ltrim($browserLogo, '/')) : asset('assets/media/logos/favicon.ico') }}" />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,400,500,600,700" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" />
     <link href="{{ asset('assets/plugins/global/plugins.bundle.css') }}" rel="stylesheet" type="text/css" />
     <link href="{{ asset('assets/css/style.bundle.css') }}" rel="stylesheet" type="text/css" />
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.11/css/dataTables.bootstrap5.min.css" />
@@ -47,26 +53,10 @@
             --diagoma-button-text: {{ $activePalette['button'] }};
             --diagoma-icon: {{ $activePalette['icon'] ?? $activePalette['primary'] }};
             --diagoma-flat: {{ !empty($activePalette['flat']) ? '1' : '0' }};
+            --dg-sidebar-bg: {{ $sidebarBackground }};
+            --dg-sidebar-accent: {{ $sidebarAccent }};
         }
-        .app-sidebar-header .logo-icon,
-        .app-sidebar-menu .menu-link.active::before,
-        .app-header .header-profile-avatar,
-        .sidebar-edge-toggle:hover,
-        .app-header .topbar-search:focus-within {
-            border-color: var(--diagoma-primary);
-        }
-        .app-sidebar-header .logo-icon,
-        .app-sidebar-menu .menu-link.active::before,
-        .app-header .header-profile-avatar {
-            background: linear-gradient(135deg, var(--diagoma-primary), var(--diagoma-primary-dark)) !important;
-        }
-        .app-sidebar-menu .menu-link.active,
-        .app-sidebar-menu .menu-link:hover,
-        .app-header .topbar-search:focus-within,
-        .sidebar-edge-toggle:hover { color: var(--diagoma-primary) !important; }
-        .app-sidebar { background: linear-gradient(180deg, color-mix(in srgb, var(--diagoma-primary-dark) 35%, #0f0f1a) 0%, #1a1a2e 100%); }
         body { background: var(--diagoma-surface); color: var(--diagoma-text); }
-        .app-header { background: color-mix(in srgb, var(--diagoma-header) 94%, transparent) !important; border-bottom-color: color-mix(in srgb, var(--diagoma-primary) 12%, #e4e9f0) !important; }
         .app-content h1, .app-content h2, .app-content h3, .app-content h4, .app-content h5, .app-content h6 { color: var(--diagoma-text); }
         .app-content .card, .app-content .modal-content, .app-content .table, .app-content .dropdown-menu { border-color: color-mix(in srgb, var(--diagoma-primary) 12%, #e5ebf3); }
         .app-content .card-header, .app-content .modal-header { background: color-mix(in srgb, var(--diagoma-primary) 4%, #fff); }
@@ -74,13 +64,8 @@
         .app-content .btn-light-primary { color: var(--diagoma-primary) !important; background: color-mix(in srgb, var(--diagoma-primary) 10%, #fff) !important; border-color: color-mix(in srgb, var(--diagoma-primary) 15%, #fff) !important; }
         .app-content .form-control:focus, .app-content .form-select:focus { border-color: var(--diagoma-primary) !important; box-shadow: 0 0 0 .2rem color-mix(in srgb, var(--diagoma-primary) 15%, transparent) !important; }
         .app-content .text-muted { color: var(--diagoma-muted) !important; }
-        .menu-icon, .header-actions .btn-icon, .app-content .bi, .app-content .fa,
-        .app-content svg { color: var(--diagoma-icon); }
+        .app-content .bi, .app-content .fa, .app-content svg { color: var(--diagoma-icon); }
         .app-content :is(.module-icon, .landing-stat-icon, .rh-icon, .admin-icon, .finance-kpi .icon) > .bi { color: inherit; }
-        [data-theme-flat="1"] .app-sidebar,
-        [data-theme-flat="1"] .app-sidebar-header .logo-icon,
-        [data-theme-flat="1"] .user-avatar,
-        [data-theme-flat="1"] .app-sidebar-menu .menu-link.active::before,
         [data-theme-flat="1"] .btn-primary,
         [data-theme-flat="1"] .app-content .btn-primary {
             background: var(--diagoma-primary) !important;
@@ -95,46 +80,9 @@
             box-sizing: border-box;
         }
 
-        .sidebar-edge-toggle {
-            position: absolute;
-            top: 14px;
-            left: 264px;
-            width: 44px;
-            height: 44px;
-            z-index: 1060;
-            border: 1px solid #e4e9f0;
-            border-radius: 10px;
-            background: #fff;
-            color: #9aa6bd;
-            box-shadow: 0 4px 12px rgba(26, 26, 46, 0.08);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            line-height: 1;
-            transition: left 0.25s ease, color 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .sidebar-edge-toggle:hover {
-            color: #4d68ff;
-            box-shadow: 0 6px 18px rgba(26, 26, 46, 0.14);
-        }
-
-        .app-sidebar.collapsed + .sidebar-edge-toggle {
-            left: 60px;
-        }
-
         body {
-            font-family: 'Inter', sans-serif;
-            background: #f0f4f9;
             overflow: hidden;
             height: 100vh;
-        }
-
-        @media (max-width: 991.98px) {
-            .sidebar-edge-toggle {
-                display: none;
-            }
         }
 
         .app-root {
@@ -148,341 +96,14 @@
             position: relative;
         }
 
-        /* ===== SIDEBAR ===== */
-        .app-sidebar {
-            background: linear-gradient(180deg, #0f0f1a 0%, #1a1a2e 100%);
-            width: 280px;
-            height: 100vh;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            flex-shrink: 0;
-            box-shadow: 4px 0 30px rgba(0, 0, 0, 0.3);
-            position: relative;
-            z-index: 100;
-            border-right: 1px solid rgba(255, 255, 255, 0.06);
-            transition: width 0.25s ease, left 0.3s ease;
-        }
-
-        /* Sidebar Header */
-        .app-sidebar-header {
-            padding: 1.25rem 1.5rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-            flex-shrink: 0;
-            background: rgba(255, 255, 255, 0.02);
-        }
-
-        .app-sidebar-header .logo-icon {
-            width: 44px;
-            height: 44px;
-            background: linear-gradient(135deg, #4d68ff, #6d4aff);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            font-weight: 800;
-            color: #fff;
-            box-shadow: 0 8px 20px rgba(77, 104, 255, 0.25);
-        }
-
-        .app-sidebar-header .company-logo {
-            display: block;
-            width: auto;
-            max-width: 180px;
-            height: 44px;
-            object-fit: contain;
-            object-position: left center;
-        }
-
-        .app-sidebar-header .brand-text {
-            color: #fff;
-            font-weight: 700;
-            font-size: 18px;
-            letter-spacing: -0.02em;
-        }
-
-        .app-sidebar-header .brand-sub {
-            color: rgba(255, 255, 255, 0.4);
-            font-size: 10px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-        }
-
-        .app-sidebar-header .version-badge {
-            background: rgba(77, 104, 255, 0.2);
-            color: #6d8aff;
-            font-size: 10px;
-            font-weight: 700;
-            padding: 0.3rem 0.7rem;
-            border-radius: 20px;
-            border: 1px solid rgba(77, 104, 255, 0.15);
-        }
-
-        /* ===== SIDEBAR MENU (SCROLLABLE) ===== */
-        .app-sidebar-menu {
-            flex: 1;
-            overflow-y: auto;
-            overflow-x: hidden;
-            padding: 1rem 0.75rem 0.5rem;
-            scrollbar-width: thin;
-            scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
-            min-height: 0;
-        }
-
-        .app-sidebar-menu::-webkit-scrollbar {
-            width: 4px;
-        }
-
-        .app-sidebar-menu::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .app-sidebar-menu::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 10px;
-        }
-
-        .app-sidebar-menu::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.25);
-        }
-
-        /* ===== MENU ITEMS ===== */
-        .menu {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-
-        .menu-section {
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-            color: rgba(255, 255, 255, 0.25);
-            padding: 1.25rem 1rem 0.6rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .menu-section::after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: rgba(255, 255, 255, 0.06);
-        }
-
-        .menu-item {
-            list-style: none;
-        }
-
-        .menu-link {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.65rem 1rem;
-            border-radius: 10px;
-            color: rgba(255, 255, 255, 0.6);
-            text-decoration: none;
-            transition: all 0.2s ease;
-            cursor: pointer;
-            position: relative;
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .menu-link:hover {
-            background: rgba(255, 255, 255, 0.06);
-            color: #fff;
-        }
-
-        .menu-item.active > .menu-link {
-            background: rgba(77, 104, 255, 0.18);
-            color: #fff;
-            box-shadow: inset 0 0 0 1px rgba(77, 104, 255, 0.15);
-        }
-
-        .menu-item.active > .menu-link::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 3px;
-            height: 24px;
-            background: linear-gradient(180deg, #4d68ff, #6d4aff);
-            border-radius: 0 4px 4px 0;
-        }
-
-        .menu-icon {
-            width: 24px;
-            height: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            flex-shrink: 0;
-            color: inherit;
-        }
-
-        .menu-title {
-            flex: 1;
-            white-space: nowrap;
-        }
-
-        .menu-badge {
-            background: rgba(77, 104, 255, 0.2);
-            color: #6d8aff;
-            font-size: 10px;
-            font-weight: 700;
-            padding: 0.15rem 0.55rem;
-            border-radius: 20px;
-        }
-
-        /* Sub-menu */
-        .menu-sub {
-            padding-left: 1.75rem;
-            display: flex;
-            flex-direction: column;
-            gap: 1px;
-        }
-
-        .menu-sub .menu-link {
-            padding: 0.4rem 1rem;
-            font-size: 13px;
-            color: rgba(255, 255, 255, 0.45);
-        }
-
-        .menu-sub .menu-link:hover {
-            color: #fff;
-            background: rgba(255, 255, 255, 0.04);
-        }
-
-        .menu-sub .menu-item.active > .menu-link {
-            color: #fff;
-            background: rgba(77, 104, 255, 0.12);
-        }
-
-        /* ===== SIDEBAR FOOTER ===== */
-        .app-sidebar-footer {
-            padding: 1rem 1.25rem 1.25rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.06);
-            flex-shrink: 0;
-            background: rgba(255, 255, 255, 0.02);
-        }
-
-        .app-sidebar-footer .btn-logout {
-            width: 100%;
-            padding: 0.65rem;
-            border-radius: 10px;
-            background: rgba(255, 70, 70, 0.12);
-            color: #ff6b6b;
-            border: 1px solid rgba(255, 70, 70, 0.1);
-            font-weight: 600;
-            font-size: 13px;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-        }
-
-        .app-sidebar-footer .btn-logout:hover {
-            background: rgba(255, 70, 70, 0.2);
-            border-color: rgba(255, 70, 70, 0.2);
-        }
-
-        @media (min-width: 992px) {
-            .app-sidebar.collapsed {
-                width: 76px;
-            }
-
-            .app-sidebar.collapsed .app-sidebar-header {
-                padding-left: 1rem;
-                padding-right: 1rem;
-            }
-
-            .app-sidebar.collapsed .brand-text,
-            .app-sidebar.collapsed .brand-sub,
-            .app-sidebar.collapsed .version-badge,
-            .app-sidebar.collapsed .menu-section,
-            .app-sidebar.collapsed .menu-title,
-            .app-sidebar.collapsed .menu-badge,
-            .app-sidebar.collapsed .app-sidebar-footer span {
-                display: none;
-            }
-
-            .app-sidebar.collapsed .menu-link {
-                justify-content: center;
-                padding-left: 0.65rem;
-                padding-right: 0.65rem;
-            }
-
-            .app-sidebar.collapsed .menu-icon {
-                margin: 0;
-            }
-
-            .app-sidebar.collapsed .app-sidebar-footer .btn-logout {
-                padding-left: 0;
-                padding-right: 0;
-            }
-        }
-
-        /* ===== HEADER ===== */
-        .app-header {
-            height: 72px;
-            background: rgba(255, 255, 255, 0.92);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border-bottom: 1px solid rgba(0, 0, 0, 0.04);
-            flex-shrink: 0;
-            position: relative;
-            z-index: 1050;
-            overflow: visible;
-        }
-
         .app-container {
-            padding: 0 2rem;
+            padding: 0 32px;
             max-width: 100%;
             width: 100%;
             min-width: 0;
         }
 
-        .app-header .app-container {
-            padding-right: 0;
-        }
-
-        .topbar-search {
-            background: #f1f4f9;
-            border: 1px solid #e4e9f0;
-            border-radius: 10px;
-            padding: 0.25rem 0.75rem;
-            min-width: 240px;
-        }
-
-        .app-header .topbar-search {
-            position: absolute;
-            left: calc(50% - 45px);
-            transform: translateX(-50%);
-            width: min(360px, 34vw);
-        }
-
-        .topbar-search input {
-            border: none;
-            background: transparent;
-            padding: 0.5rem 0.25rem;
-            font-size: 13px;
-            width: 100%;
-            outline: none;
-            color: #1a1a2e;
-        }
-
-        .topbar-search input::placeholder {
-            color: #8e96a8;
-        }
-
+        /* ===== RECHERCHE D'EMPLOYÉS (barre du haut) ===== */
         .employee-search-results {
            position: absolute;
            top: calc(100% + 8px);
@@ -493,7 +114,7 @@
            max-height: 320px;
            overflow-y: auto;
            background: #fff;
-           border: 1px solid #e4e9f0;
+           border: 1px solid #e3e7ef;
            border-radius: 10px;
            box-shadow: 0 12px 28px rgba(15, 23, 42, .14);
         }
@@ -501,142 +122,19 @@
         .employee-search-result {
            display: block;
            padding: .7rem .85rem;
-           color: #1a1a2e;
+           color: #172033;
            text-decoration: none;
            border-bottom: 1px solid #f0f2f5;
         }
 
-        .employee-search-result:hover { background: #f5f8fc; }
-        .employee-search-empty { padding: .8rem .85rem; color: #8e96a8; }
-
-        .header-actions .btn-icon {
-            width: 38px;
-            height: 38px;
-            border-radius: 10px;
-            background: #f1f4f9;
-            border: 1px solid #e4e9f0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #4a5068;
-            transition: all 0.2s ease;
-        }
-
-        .header-actions .btn-icon:hover {
-            background: #e4e9f0;
-            color: #1a1a2e;
-        }
-
-        .user-profile {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.25rem 0.75rem 0.25rem 0.5rem;
-            background: #f1f4f9;
-            border-radius: 30px;
-            border: 1px solid #e4e9f0;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .user-profile:hover {
-            background: #e8ecf5;
-            border-color: #d5dceb;
-        }
-
-        .user-avatar {
-            width: 34px;
-            height: 34px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #4d68ff, #6d4aff);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            font-weight: 700;
-            font-size: 14px;
-            overflow: hidden;
-            flex-shrink: 0;
-        }
-
-        .user-avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .user-name {
-            font-weight: 600;
-            font-size: 13px;
-            color: #1a1a2e;
-        }
-
-        .header-user-menu {
-            min-width: 210px;
-            padding: 0.5rem;
-            border: 1px solid #e4e9f0;
-            box-shadow: 0 12px 30px rgba(26, 26, 46, 0.12);
-            z-index: 1100;
-        }
-
-        .app-header .dropdown:last-child {
-            margin-right: 0;
-        }
-
-        .app-header .header-profile-dropdown {
-            position: absolute;
-            right: 0;
-            top: 50%;
-            transform: translateY(-50%);
-            z-index: 1100;
-        }
-
-        .app-header .header-actions {
-            padding-left: 32px;
-            padding-right: 220px;
-        }
-
-        .header-language-menu {
-            min-width: 130px;
-        }
-
-        .header-notification-menu {
-            min-width: 300px;
-            padding: .5rem;
-        }
-
-        .header-notification-menu .notification-item {
-            display: block;
-            padding: .65rem .75rem;
-            border-radius: 8px;
-            text-decoration: none;
-            color: #1a1a2e;
-        }
-
-        .header-notification-menu .notification-item:hover {
-            background: #f1f4f9;
-        }
-
-        .header-user-menu .dropdown-item {
-            border-radius: 8px;
-            padding: 0.65rem 0.75rem;
-        }
-
-        .header-user-menu .dropdown-item:hover {
-            background: #f1f4f9;
-        }
-
-        .user-role {
-            font-size: 11px;
-            color: #8e96a8;
-        }
+        .employee-search-result:hover { background: #f7f8fb; }
+        .employee-search-empty { padding: .8rem .85rem; color: #8a93a6; }
 
         /* ===== CONTENT ===== */
         .app-content {
-            background: #f0f4f9;
             flex: 1;
             overflow-y: auto;
-            padding: 1.5rem 0;
+            padding: 28px 0;
         }
 
         .app-content::-webkit-scrollbar {
@@ -727,75 +225,42 @@
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, #4d68ff, #6d4aff);
             border: none;
             color: #fff;
         }
 
         .btn-primary:hover {
             transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(77, 104, 255, 0.25);
         }
 
         .btn-light-primary {
-            background: rgba(77, 104, 255, 0.08);
-            color: #4d68ff;
-            border: 1px solid rgba(77, 104, 255, 0.12);
+            background: rgba(39, 55, 114, 0.08);
+            color: #273772;
+            border: 1px solid rgba(39, 55, 114, 0.12);
         }
 
         .btn-light-primary:hover {
-            background: rgba(77, 104, 255, 0.15);
+            background: rgba(39, 55, 114, 0.15);
         }
 
         /* ===== RESPONSIVE ===== */
-        @media (max-width: 992px) {
-            .app-sidebar {
-                position: fixed;
-                top: 0;
-                left: -100%;
-                transition: left 0.3s ease;
-                z-index: 1050;
-                height: 100vh;
-                width: 280px;
-            }
-
-            .app-sidebar.open {
-                left: 0;
-            }
-
+        @media (max-width: 991.98px) {
             .app-sidebar-overlay {
                 position: fixed;
                 inset: 0;
-                background: rgba(0, 0, 0, 0.5);
-                z-index: 1040;
+                background: rgba(23, 32, 51, 0.5);
+                z-index: 1060;
                 display: none;
             }
 
             .app-sidebar-overlay.open {
                 display: block;
             }
-
-            .topbar-search {
-                min-width: 140px;
-            }
-
-            .user-profile .user-details {
-                display: none;
-            }
-
         }
 
         @media (max-width: 576px) {
             .app-container {
-                padding: 0 1rem;
-            }
-
-            .topbar-search {
-                min-width: 100px;
-            }
-
-            .topbar-search input {
-                font-size: 12px;
+                padding: 0 16px;
             }
 
             .page-heading {
@@ -922,40 +387,6 @@
     </style>
     <style>
         /* Tenant-selected palette overrides the base layout styles. */
-        .app-sidebar {
-            background: linear-gradient(180deg, var(--diagoma-primary-dark) 0%, #151b2c 100%) !important;
-        }
-        .app-sidebar-header .logo-icon,
-        .user-avatar {
-            background: linear-gradient(135deg, var(--diagoma-primary), var(--diagoma-primary-dark)) !important;
-        }
-        .app-sidebar-header .version-badge {
-            background: color-mix(in srgb, var(--diagoma-primary) 20%, transparent) !important;
-            color: var(--diagoma-primary) !important;
-            border-color: color-mix(in srgb, var(--diagoma-primary) 35%, transparent) !important;
-        }
-        .menu-item.active > .menu-link {
-            background: color-mix(in srgb, var(--diagoma-primary) 22%, transparent) !important;
-            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--diagoma-primary) 35%, transparent) !important;
-        }
-        .menu-item.active > .menu-link::before {
-            background: linear-gradient(180deg, var(--diagoma-primary), var(--diagoma-primary-dark)) !important;
-        }
-        .menu-link:hover,
-        .menu-link:focus,
-        .menu-item.active > .menu-link {
-            color: #fff !important;
-        }
-        .app-header .topbar-search:focus-within,
-        .header-actions .btn-icon:hover,
-        .user-profile:hover {
-            border-color: color-mix(in srgb, var(--diagoma-primary) 40%, #e4e9f0) !important;
-            color: var(--diagoma-primary) !important;
-        }
-        .user-profile .user-name,
-        .header-actions .btn-icon:hover {
-            color: var(--diagoma-primary) !important;
-        }
         .btn-primary,
         .app-content .btn-primary {
             background-color: var(--diagoma-primary) !important;
@@ -969,7 +400,7 @@
         .text-primary { color: var(--diagoma-primary) !important; }
         .bg-primary { background-color: var(--diagoma-primary) !important; }
         .border-primary { border-color: var(--diagoma-primary) !important; }
-        .app-content a:not(.btn):hover,
+        .app-content a:not(.btn):not([class*="dg-"]):hover,
         .app-content .table-sortable:hover,
         .app-content .table-sort-icon .active {
             color: var(--diagoma-primary) !important;
@@ -979,303 +410,191 @@
         .datatable-export-toolbar .buttons-excel { background:#e9f8ef !important; color:#16834b !important; }
         .datatable-export-toolbar .buttons-pdf { background:#fff0f0 !important; color:#c03945 !important; }
         .datatable-export-toolbar .buttons-copy { background:#eef3ff !important; color:#3154b7 !important; }
-        body[data-theme-dark="1"] { background: #f0f4f9; color: #172b4d; }
-        body[data-theme-dark="1"] .app-sidebar { background: #101114 !important; }
-        body[data-theme-dark="1"] .app-header { background: rgba(255,255,255,.92) !important; border-bottom-color: rgba(0,0,0,.04) !important; }
-        body[data-theme-dark="1"] .app-header .topbar-search,
-        body[data-theme-dark="1"] .app-header .header-actions .btn-icon,
-        body[data-theme-dark="1"] .app-header .user-profile {
-            background: #f1f4f9 !important;
-            border-color: #e4e9f0 !important;
-            color: #4a5068 !important;
-        }
-        body[data-theme-dark="1"] .app-header .topbar-search input,
-        body[data-theme-dark="1"] .app-header .user-name { color: #1a1a2e !important; }
     </style>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" />
     <link rel="stylesheet" href="{{ asset('css/diago.css') }}" />
 </head>
-<body id="kt_app_body" data-theme-flat="{{ !empty($activePalette['flat']) ? '1' : '0' }}" data-theme-dark="{{ !empty($activePalette['dark_mode']) ? '1' : '0' }}">
+<body id="kt_app_body" class="dg-app" data-theme-flat="{{ !empty($activePalette['flat']) ? '1' : '0' }}" data-theme-dark="{{ !empty($activePalette['dark_mode']) ? '1' : '0' }}">
+    @php
+        $currentUser = auth()->user();
+        $userInitials = collect(preg_split('/\s+/', trim($currentUser->name ?? '')))
+            ->filter()
+            ->take(2)
+            ->map(fn ($part) => mb_strtoupper(mb_substr($part, 0, 1)))
+            ->implode('') ?: 'U';
+        $organisationName = $currentUser->succursale?->name ?? $currentUser->entreprise?->name ?? 'Console Diago';
+    @endphp
     <div class="d-flex flex-column flex-root app-root" id="kt_app_root">
         <div class="app-page d-flex" id="kt_app_page">
             <!-- ===== SIDEBAR OVERLAY (mobile) ===== -->
             <div class="app-sidebar-overlay" id="kt_app_sidebar_overlay"></div>
 
             <!-- ===== SIDEBAR ===== -->
-            <aside id="kt_app_sidebar" class="app-sidebar">
-                <!-- Header -->
-                <div class="app-sidebar-header">
-                    <div class="d-flex align-items-center justify-content-between">
-                        <a href="{{ route('admin.dashboard') }}" class="d-flex align-items-center text-decoration-none gap-3">
-                            @php
-                                $companyLogo = data_get(auth()->user()->entreprise?->settings ?? [], 'logo');
-                            @endphp
-                            @if($companyLogo)
-                                <img src="{{ asset('storage/' . ltrim($companyLogo, '/')) }}" alt="{{ auth()->user()->entreprise?->name ?? 'Logo de l’entreprise' }}" class="company-logo">
-                            @else
-                                <div class="logo-icon">D</div>
-                                <div>
-                                    <div class="brand-text">{{ auth()->user()->entreprise?->name ?? 'Diagoma' }}</div>
-                                    <div class="brand-sub">ERP</div>
-                                </div>
-                            @endif
+            <aside id="kt_app_sidebar" class="dg-sidebar">
+                <div class="dg-sidebar__brand">
+                    <a href="{{ route('admin.dashboard') }}" class="dg-brand" aria-label="Diago, by CME Expertises">
+                        <span class="dg-brand__name"><i class="bi bi-bar-chart-fill" aria-hidden="true"></i><span class="dg-brand__word">DIAGO</span></span>
+                        <span class="dg-brand__tagline">By CME Expertises</span>
+                    </a>
+                </div>
+
+                <nav class="dg-sidebar__nav" aria-label="Navigation principale">
+                    @php
+                        $enabledRubriques = array_merge(
+                            ['pilotage' => true, 'commercial' => true, 'comptabilite' => true, 'rh' => true, 'administration' => true, 'succursales' => false],
+                            data_get($currentUser->entreprise?->settings ?? [], 'enabled_rubriques', [])
+                        );
+                        $navItems = [];
+                        if ($currentUser->hasRole('super_admin')) {
+                            $navItems[] = ['route' => 'console.index', 'active' => ['console.index', 'console.dashboard'], 'icon' => 'bi-house-door-fill', 'label' => __('Dashboard')];
+                            $navItems[] = ['route' => 'console.account-tracking', 'active' => ['console.account-tracking'], 'icon' => 'bi-clipboard-data-fill', 'label' => __('Account tracking')];
+                            $navItems[] = ['route' => 'console.pack-requests', 'active' => ['console.pack-requests'], 'icon' => 'bi-box-seam-fill', 'label' => 'Demandes de packs'];
+                            $navItems[] = ['route' => 'admin.demorequests', 'active' => ['admin.demorequests'], 'icon' => 'bi-chat-dots-fill', 'label' => __('Demo requests')];
+                        } else {
+                            if ($currentUser->hasPermission('dashboard')) {
+                                $navItems[] = ['route' => 'admin.dashboard', 'active' => ['admin.dashboard', 'dashboard'], 'icon' => 'bi-house-door-fill', 'label' => __('Dashboard')];
+                            }
+                            if (data_get($currentUser->entreprise?->settings, 'ai_assistant_enabled', false)) {
+                                $navItems[] = ['route' => 'admin.ai-assistant', 'active' => ['admin.ai-assistant*'], 'icon' => 'bi-robot', 'label' => 'Assistant IA'];
+                            }
+                            if (!empty($enabledRubriques['administration']) && $currentUser->hasPermission('administration')) {
+                                $navItems[] = ['route' => 'admin.administration', 'active' => ['admin.administration*'], 'icon' => 'bi-folder-fill', 'label' => __('Administrative management')];
+                            }
+                            if (!empty($enabledRubriques['comptabilite']) && $currentUser->hasPermission('accounting')) {
+                                $navItems[] = ['route' => 'admin.comptabilite', 'active' => ['admin.comptabilite*'], 'icon' => 'bi-calculator-fill', 'label' => __('Accounting')];
+                            }
+                            if (!empty($enabledRubriques['rh']) && $currentUser->hasPermission('hr')) {
+                                $navItems[] = ['route' => 'admin.rh', 'active' => ['admin.rh'], 'icon' => 'bi-people-fill', 'label' => __('HR & Paie')];
+                            }
+                            if (!empty($enabledRubriques['commercial']) && $currentUser->hasPermission('commercial')) {
+                                $navItems[] = ['route' => 'admin.commercial', 'active' => ['admin.commercial*'], 'icon' => 'bi-bag-fill', 'label' => __('Commercial')];
+                            }
+                            if (!empty($enabledRubriques['succursales']) && $currentUser->hasPermission('succursales')) {
+                                $navItems[] = ['route' => 'admin.succursales.index', 'active' => ['admin.succursales*'], 'icon' => 'bi-buildings-fill', 'label' => __('Branches')];
+                            }
+                            if ($currentUser->hasPermission('users')) {
+                                $navItems[] = ['route' => 'admin.users.index', 'active' => ['admin.users*'], 'icon' => 'bi-person-fill', 'label' => __('Users')];
+                            }
+                        }
+                        if ($currentUser->hasPermission('settings')) {
+                            $navItems[] = ['route' => 'admin.settings', 'active' => ['admin.settings*'], 'icon' => 'bi-gear-fill', 'label' => __('Settings')];
+                        }
+                    @endphp
+                    @foreach($navItems as $item)
+                        @php($isActive = request()->routeIs(...$item['active']))
+                        <a href="{{ route($item['route']) }}" class="dg-nav-link {{ $isActive ? 'is-active' : '' }}" @if($isActive) aria-current="page" @endif title="{{ $item['label'] }}">
+                            <i class="bi {{ $item['icon'] }}" aria-hidden="true"></i>
+                            <span class="dg-nav-link__label">{{ $item['label'] }}</span>
                         </a>
-                        <span class="version-badge">v1.0</span>
-                    </div>
-                </div>
+                    @endforeach
+                </nav>
 
-                <!-- Scrollable Menu -->
-                <div class="app-sidebar-menu">
-                    <div class="menu">
-                        @php
-                            $enabledRubriques = array_merge(
-                                ['pilotage' => true, 'commercial' => true, 'comptabilite' => true, 'rh' => true, 'administration' => true, 'succursales' => false],
-                                data_get(auth()->user()->entreprise?->settings ?? [], 'enabled_rubriques', [])
-                            );
-                        @endphp
-                        <!-- Section: Navigation -->
-                        <div class="menu-section">{{ __('Navigation') }}</div>
-
-                        <!--<div class="menu-item {{ request()->routeIs('admin.hub') ? 'active' : '' }}">
-                            <a href="{{ route('admin.hub') }}" class="menu-link">
-                                <span class="menu-icon"><i class="bi bi-gear"></i></span>
-                                <span class="menu-title">Administration</span>
-                            </a>
-                        </div>-->
-
-                        @if(auth()->user()->hasRole('super_admin'))
-                        <div class="menu-section">{{ __('Console') }}</div>
-                        <div class="menu-item {{ request()->routeIs('console.index', 'console.dashboard') ? 'active' : '' }}">
-                            <a href="{{ route('console.index') }}" class="menu-link">
-                                <span class="menu-icon"><i class="bi bi-speedometer2"></i></span>
-                                <span class="menu-title">Dashboard</span>
-                            </a>
-                        </div>
-                        <div class="menu-item {{ request()->routeIs('console.account-tracking') ? 'active' : '' }}">
-                            <a href="{{ route('console.account-tracking') }}" class="menu-link">
-                                <span class="menu-icon"><i class="bi bi-clipboard-data"></i></span>
-                                <span class="menu-title">{{ __('Account tracking') }}</span>
-                            </a>
-                        </div>
-                        <div class="menu-item {{ request()->routeIs('console.pack-requests') ? 'active' : '' }}">
-                            <a href="{{ route('console.pack-requests') }}" class="menu-link">
-                                <span class="menu-icon"><i class="bi bi-box-seam"></i></span>
-                                <span class="menu-title">Demandes de packs</span>
-                            </a>
-                        </div>
-                        @else
-                        <!-- Section: Modules -->
-                        <div class="menu-section">{{ __('Modules') }}</div>
-                        @if(auth()->user()->hasPermission('dashboard'))
-                        <div class="menu-item {{ request()->routeIs('admin.dashboard', 'dashboard') ? 'active' : '' }}">
-                            <a href="{{ route('admin.dashboard') }}" class="menu-link">
-                                <span class="menu-icon"><i class="bi bi-speedometer2"></i></span>
-                                <span class="menu-title">Dashboard</span>
-                            </a>
-                        </div>
-                        @endif
-                        @if(data_get(auth()->user()->entreprise?->settings, 'ai_assistant_enabled', false))
-                        <div class="menu-item {{ request()->routeIs('admin.ai-assistant*') ? 'active' : '' }}">
-                            <a href="{{ route('admin.ai-assistant') }}" class="menu-link">
-                                <span class="menu-icon"><i class="bi bi-robot"></i></span>
-                                <span class="menu-title">Assistant IA</span>
-                            </a>
-                        </div>
-                        @endif
-                        @if(!empty($enabledRubriques['administration']) && auth()->user()->hasPermission('administration'))
-                        <div class="menu-item {{ request()->routeIs('admin.administration*') ? 'active' : '' }}">
-                            <a href="{{ route('admin.administration') }}" class="menu-link">
-                                <span class="menu-icon"><i class="bi bi-folder2-open"></i></span>
-                                <span class="menu-title">{{ __('Administrative management') }}</span>
-                            </a>
-                        </div>
-                        @endif
-
-
-                        @if(!empty($enabledRubriques['comptabilite']) && auth()->user()->hasPermission('accounting'))
-                        <div class="menu-item {{ request()->routeIs('admin.comptabilite*') ? 'active' : '' }}">
-                            <a href="{{ route('admin.comptabilite') }}" class="menu-link">
-                                <span class="menu-icon"><i class="bi bi-calculator"></i></span>
-                                <span class="menu-title">{{ __('Accounting') }}</span>
-                                <span class="menu-badge"></span>
-                            </a>
-                        </div>
-                        @endif
-
-
-                        @if(!empty($enabledRubriques['rh']) && auth()->user()->hasPermission('hr'))
-                        <div class="menu-item {{ request()->routeIs('admin.rh') ? 'active' : '' }}">
-                            <a href="{{ route('admin.rh') }}" class="menu-link">
-                                <span class="menu-icon"><i class="bi bi-people"></i></span>
-                                <span class="menu-title">{{ __('HR & Paie') }}</span>
-                            </a>
-                        </div>
-                        @endif
-
-                        @if(!empty($enabledRubriques['commercial']) && auth()->user()->hasPermission('commercial'))
-                        <div class="menu-item {{ request()->routeIs('admin.commercial*') ? 'active' : '' }}">
-                            <a href="{{ route('admin.commercial') }}" class="menu-link">
-                                <span class="menu-icon"><i class="bi bi-graph-up-arrow"></i></span>
-                                <span class="menu-title">{{ __('Commercial') }}</span>
-                                <span class="menu-badge"></span>
-                            </a>
-                        </div>
-                        @endif
-                        @if(!empty($enabledRubriques['succursales']) && auth()->user()->hasPermission('succursales'))
-                        <div class="menu-item {{ request()->routeIs('admin.succursales*') ? 'active' : '' }}">
-                            <a href="{{ route('admin.succursales.index') }}" class="menu-link">
-                                <span class="menu-icon"><i class="bi bi-shop"></i></span>
-                                <span class="menu-title">{{ __('Branches') }}</span>
-                            </a>
-                        </div>
-                        @endif
-                        @endif
-
-                        @if(auth()->user()->hasRole('super_admin'))
-                        <div class="menu-item {{ request()->routeIs('admin.demorequests') ? 'active' : '' }}">
-                            <a href="{{ route('admin.demorequests') }}" class="menu-link">
-                                <span class="menu-icon"><i class="bi bi-chat-dots"></i></span>
-                                <span class="menu-title">{{ __('Demo requests') }}</span>
-                            </a>
-                        </div>
-                        @endif
-                        <!-- Section: Configuration -->
-                        <div class="menu-section">{{ __('Configuration') }}</div>
-
-                        @if(!auth()->user()->hasRole('super_admin') && auth()->user()->hasPermission('users'))
-                        <div class="menu-item {{ request()->routeIs('admin.users*') ? 'active' : '' }}">
-                            <a href="{{ route('admin.users.index') }}" class="menu-link">
-                                <span class="menu-icon"><i class="bi bi-person"></i></span>
-                                <span class="menu-title">{{ __('Users') }}</span>
-                            </a>
-                        </div>
-                        @endif
-
-                        @if(auth()->user()->hasPermission('settings'))
-                        <div class="menu-item {{ request()->routeIs('admin.settings*') ? 'active' : '' }}">
-                            <a href="{{ route('admin.settings') }}" class="menu-link">
-                                <span class="menu-icon"><i class="bi bi-sliders"></i></span>
-                                <span class="menu-title">{{ __('Settings') }}</span>
-                            </a>
-                        </div>
-                        @endif
-                    </div>
-                </div>
-
-                <!-- Footer with logout -->
-                <div class="app-sidebar-footer">
-                    <form method="POST" action="{{ route('logout') }}">
-                        @csrf
-                        <button type="submit" class="btn-logout">
-                            <i class="bi bi-box-arrow-right"></i>
-                            Déconnexion
-                        </button>
-                    </form>
+                <div class="dg-sidebar__footer dropup">
+                    <button type="button" class="dg-user" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Menu du compte">
+                        <span class="dg-avatar">
+                            @if($currentUser->avatar_path)
+                                <img src="{{ asset('storage/' . $currentUser->avatar_path) }}" alt="">
+                            @else
+                                {{ $userInitials }}
+                            @endif
+                        </span>
+                        <span class="dg-user__text">
+                            <span class="dg-user__name">{{ $currentUser->name ?? 'Administrateur' }}</span>
+                            <span class="dg-user__meta">{{ $currentUser->entreprise?->name ?? $currentUser->role?->label ?? 'Super administrateur' }}</span>
+                        </span>
+                        <i class="bi bi-chevron-up" aria-hidden="true"></i>
+                    </button>
+                    <ul class="dropdown-menu dg-dropdown">
+                        <li class="dg-dropdown__header">
+                            {{ $currentUser->name ?? 'Administrateur' }}
+                            <span class="d-block fw-normal dg-muted" style="font-size:13px">{{ $currentUser->email ?? '' }}</span>
+                        </li>
+                        <li><a class="dropdown-item" href="{{ route('admin.profile') }}"><i class="bi bi-person"></i>Profil</a></li>
+                        <li>
+                            <form method="POST" action="{{ route('logout') }}">
+                                @csrf
+                                <button type="submit" class="dropdown-item text-danger"><i class="bi bi-box-arrow-right"></i>Se déconnecter</button>
+                            </form>
+                        </li>
+                    </ul>
                 </div>
             </aside>
-            <button class="sidebar-edge-toggle" id="kt_app_sidebar_edge_toggle" type="button" aria-label="Réduire ou ouvrir le menu" title="Réduire ou ouvrir le menu">
-                <span aria-hidden="true">←</span>
+            <button class="dg-sidebar-toggle" id="kt_app_sidebar_edge_toggle" type="button" aria-label="Réduire ou ouvrir le menu" title="Réduire ou ouvrir le menu">
+                <i class="bi bi-chevron-left" aria-hidden="true"></i>
             </button>
 
             <!-- ===== MAIN WRAPPER ===== -->
             <div class="app-wrapper d-flex flex-column flex-fill" id="kt_app_wrapper">
                 <!-- ===== HEADER ===== -->
-                <header id="kt_app_header" class="app-header">
-                    <div class="app-container d-flex align-items-center h-100">
-                        <!-- Mobile toggle -->
-                        <button class="btn btn-icon d-lg-none me-2" id="kt_app_sidebar_toggle" type="button" aria-label="Ouvrir ou fermer le menu">
-                            <span style="font-size:20px;">☰</span>
-                        </button>
+                <header id="kt_app_header" class="dg-topbar">
+                    <button class="dg-icon-btn dg-icon-btn--ghost d-lg-none" id="kt_app_sidebar_toggle" type="button" aria-label="Ouvrir ou fermer le menu">
+                        <i class="bi bi-list"></i>
+                    </button>
 
-                        <!-- Brand mobile -->
-                        <a href="{{ route('admin.dashboard') }}" class="d-lg-none me-3">
-                            <span class="badge bg-primary px-3 py-2 rounded-2">D</span>
-                        </a>
+                    <div class="dg-topbar__start">
+                        {{-- Une page peut remplacer la recherche par son propre contenu (titre, filtres…). --}}
+                        @hasSection('topbar')
+                            @yield('topbar')
+                        @else
+                            <div class="dg-search" id="employee-search">
+                                <i class="bi bi-search" aria-hidden="true"></i>
+                                <input type="search" id="employee-search-input" placeholder="{{ __('Search an employee...') }}" autocomplete="off" aria-label="{{ __('Search an employee...') }}" />
+                                <div class="employee-search-results" id="employee-search-results"></div>
+                            </div>
+                        @endif
+                    </div>
 
-                        <!-- Search centered in the header -->
-                        <div class="topbar-search d-flex align-items-center position-relative" id="employee-search">
-                            <i class="bi bi-search" style="color:#8e96a8;"></i>
-                            <input type="search" id="employee-search-input" placeholder="{{ __('Search an employee...') }}" autocomplete="off" aria-label="{{ __('Search an employee...') }}" />
-                            <span class="text-muted fs-8" style="cursor:pointer;">⌘K</span>
-                            <div class="employee-search-results" id="employee-search-results"></div>
+                    <div class="dg-topbar__end">
+                        <span class="dg-org-pill" title="{{ $organisationName }}"><i class="bi bi-buildings" aria-hidden="true"></i><span>{{ $organisationName }}</span></span>
+
+                        <div class="dropdown">
+                            <button class="dg-icon-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{ __('Choose language') }}"><i class="bi bi-globe"></i></button>
+                            <ul class="dropdown-menu dropdown-menu-end dg-dropdown" style="min-width:160px">
+                                @php($currentLocale = app()->getLocale())
+                                <li><form method="POST" action="{{ route('locale.update') }}">@csrf<input type="hidden" name="locale" value="fr"><button class="dropdown-item {{ $currentLocale === 'fr' ? 'active' : '' }}" type="submit">Français</button></form></li>
+                                <li><form method="POST" action="{{ route('locale.update') }}">@csrf<input type="hidden" name="locale" value="en"><button class="dropdown-item {{ $currentLocale === 'en' ? 'active' : '' }}" type="submit">English</button></form></li>
+                            </ul>
                         </div>
 
-                        <!-- Right actions -->
-                        <div class="d-flex align-items-center ms-auto gap-2 header-actions">
-                            <!-- Language and notifications near the profile -->
-                            <div class="dropdown">
-                                <button class="btn btn-icon btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{ __('Choose language') }}"><i class="bi bi-globe"></i></button>
-                                <ul class="dropdown-menu dropdown-menu-end header-language-menu">
-                                    @php($currentLocale = app()->getLocale())
-                                    <li><form method="POST" action="{{ route('locale.update') }}">@csrf<input type="hidden" name="locale" value="fr"><button class="dropdown-item {{ $currentLocale === 'fr' ? 'active' : '' }}" type="submit">Français</button></form></li>
-                                    <li><form method="POST" action="{{ route('locale.update') }}">@csrf<input type="hidden" name="locale" value="en"><button class="dropdown-item {{ $currentLocale === 'en' ? 'active' : '' }}" type="submit">English</button></form></li>
-                                </ul>
-                            </div>
-
-                            <div class="dropdown">
-                                <button class="btn btn-icon btn-sm position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Notifications">
-                                    <i class="bi bi-bell"></i>
-                                    @if(($notificationCount ?? 0) > 0)
-                                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:9px; padding:0.2rem 0.4rem;">{{ $notificationCount ?? 0 }}</span>
-                                    @endif
-                                </button>
-                                <div class="dropdown-menu dropdown-menu-end header-notification-menu">
-                                    <div class="px-2 py-2 border-bottom fw-bold">{{ __('Notifications') }}</div>
-                                    <a href="{{ route('admin.rh.permissions') }}" class="notification-item">
-                                        <i class="bi bi-pencil-square me-2"></i>{{ $pendingPermissions ?? 0 }} {{ __('Pending permission request(s)') }}
-                                    </a>
-                                    <a href="{{ route('admin.rh.leaves') }}" class="notification-item">
-                                        <i class="bi bi-calendar-range me-2"></i>{{ $pendingLeaves ?? 0 }} {{ __('Pending leave request(s)') }}
-                                    </a>
-                                    @foreach(($stockAlerts ?? collect()) as $stockAlert)
-                                        <a href="{{ route('admin.commercial.module', 'etat-stock') }}" class="notification-item">
-                                            <i class="bi {{ $stockAlert['quantity'] <= 0 ? 'bi-x-octagon text-danger' : 'bi-exclamation-triangle text-warning' }} me-2"></i>
+                        <div class="dropdown">
+                            <button class="dg-icon-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Notifications ({{ $notificationCount ?? 0 }})">
+                                <i class="bi bi-bell"></i>
+                                @if(($notificationCount ?? 0) > 0)
+                                    <span class="dg-dot" aria-hidden="true"></span>
+                                @endif
+                            </button>
+                            <div class="dropdown-menu dropdown-menu-end dg-dropdown dg-dropdown--wide">
+                                <div class="dg-dropdown__header">{{ __('Notifications') }}@if(($notificationCount ?? 0) > 0) ({{ $notificationCount }})@endif</div>
+                                <a href="{{ route('admin.rh.permissions') }}" class="dg-notification">
+                                    <i class="bi bi-pencil-square"></i><span>{{ $pendingPermissions ?? 0 }} {{ __('Pending permission request(s)') }}</span>
+                                </a>
+                                <a href="{{ route('admin.rh.leaves') }}" class="dg-notification">
+                                    <i class="bi bi-calendar-range"></i><span>{{ $pendingLeaves ?? 0 }} {{ __('Pending leave request(s)') }}</span>
+                                </a>
+                                @foreach(($stockAlerts ?? collect()) as $stockAlert)
+                                    <a href="{{ route('admin.commercial.module', 'etat-stock') }}" class="dg-notification">
+                                        <i class="bi {{ $stockAlert['quantity'] <= 0 ? 'bi-x-octagon text-danger' : 'bi-exclamation-triangle text-warning' }}"></i>
+                                        <span>
                                             <strong>{{ $stockAlert['name'] }}</strong>
-                                            <span class="d-block small text-muted ms-4">{{ $stockAlert['quantity'] <= 0 ? 'Rupture de stock' : 'Stock faible' }} · {{ number_format(max(0, $stockAlert['quantity']), 2, ',', ' ') }} {{ $stockAlert['unit'] }}</span>
-                                        </a>
-                                    @endforeach
-                                    @if($pendingAnnualReport ?? null)
-                                        <a href="{{ route('admin.bilans.show', $pendingAnnualReport) }}" class="notification-item">
-                                            <i class="bi bi-file-earmark-bar-graph me-2"></i>
+                                            <small>{{ $stockAlert['quantity'] <= 0 ? 'Rupture de stock' : 'Stock faible' }} · {{ number_format(max(0, $stockAlert['quantity']), 2, ',', ' ') }} {{ $stockAlert['unit'] }}</small>
+                                        </span>
+                                    </a>
+                                @endforeach
+                                @if($pendingAnnualReport ?? null)
+                                    <a href="{{ route('admin.bilans.show', $pendingAnnualReport) }}" class="dg-notification">
+                                        <i class="bi bi-file-earmark-bar-graph"></i>
+                                        <span>
                                             <strong>{{ $pendingAnnualReport->label() }}</strong>
-                                            <span class="d-block small text-muted ms-4">Exercice clos, bilan non téléchargé</span>
-                                        </a>
-                                    @endif
-                                    @if(($notificationCount ?? 0) === 0)
-                                        <div class="text-muted small px-2 py-3">{{ __('No new requests.') }}</div>
-                                    @endif
-                                </div>
-                            </div>
-
-                            <!-- User profile -->
-                            <div class="dropdown header-profile-dropdown">
-                                <button type="button" class="user-profile border-0" data-bs-toggle="dropdown" aria-expanded="false">
-                                <div class="user-avatar">
-                                    <img src="{{ auth()->user()->avatar_path ? asset('storage/' . auth()->user()->avatar_path) : asset('assets/media/avatars/300-1.jpg') }}" alt="Photo de {{ auth()->user()->name ?? 'Administrateur' }}">
-                                </div>
-                                <div class="user-details">
-                                    <div class="user-name">{{ auth()->user()->name ?? 'Administrateur' }}</div>
-                                    <div class="user-role">{{ auth()->user()->role?->label ?? 'Super admin' }}</div>
-                                </div>
-                                <span class="ms-1 text-muted">⌄</span>
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end header-user-menu">
-                                    <li class="px-3 py-2 border-bottom mb-1">
-                                        <div class="fw-bold">{{ auth()->user()->name ?? 'Administrateur' }}</div>
-                                        <div class="text-muted fs-8">{{ auth()->user()->email ?? '' }}</div>
-                                    </li>
-                                    <li><a class="dropdown-item" href="{{ route('admin.profile') }}"><i class="bi bi-person me-2"></i>Profil</a></li>
-                                    <li>
-                                        <form method="POST" action="{{ route('logout') }}">
-                                            @csrf
-                                            <button type="submit" class="dropdown-item text-danger"><i class="bi bi-box-arrow-right me-2"></i>Se déconnecter</button>
-                                        </form>
-                                    </li>
-                                </ul>
+                                            <small>Exercice clos, bilan non téléchargé</small>
+                                        </span>
+                                    </a>
+                                @endif
+                                @if(($notificationCount ?? 0) === 0)
+                                    <div class="dg-notification-empty">{{ __('No new requests.') }}</div>
+                                @endif
                             </div>
                         </div>
+
+                        @yield('topbar-actions')
                     </div>
                 </header>
 
@@ -1317,8 +636,8 @@
             if (toggles.length && sidebar && overlay) {
                 const open = () => {
                     if (window.innerWidth >= 992) {
-                        sidebar.classList.toggle('collapsed');
-                        localStorage.setItem('diagoma-sidebar-collapsed', sidebar.classList.contains('collapsed') ? '1' : '0');
+                        sidebar.classList.toggle('is-collapsed');
+                        localStorage.setItem('diagoma-sidebar-collapsed', sidebar.classList.contains('is-collapsed') ? '1' : '0');
                         return;
                     }
                     sidebar.classList.add('open');
@@ -1335,14 +654,14 @@
                 toggles.forEach(toggle => toggle.addEventListener('click', open));
                 const updateArrow = () => {
                     const edge = document.getElementById('kt_app_sidebar_edge_toggle');
-                    if (edge) edge.querySelector('span').textContent = sidebar.classList.contains('collapsed') ? '→' : '←';
+                    if (edge) edge.querySelector('i').className = 'bi ' + (sidebar.classList.contains('is-collapsed') ? 'bi-chevron-right' : 'bi-chevron-left');
                 };
-                updateArrow();
                 document.getElementById('kt_app_sidebar_edge_toggle')?.addEventListener('click', updateArrow);
                 overlay.addEventListener('click', close);
                 if (window.innerWidth >= 992 && localStorage.getItem('diagoma-sidebar-collapsed') === '1') {
-                    sidebar.classList.add('collapsed');
+                    sidebar.classList.add('is-collapsed');
                 }
+                updateArrow();
 
                 // Close on Escape
                 document.addEventListener('keydown', (e) => {
@@ -1396,7 +715,7 @@
             const sidebar = document.getElementById('kt_app_sidebar');
             const overlay = document.getElementById('kt_app_sidebar_overlay');
             if (window.innerWidth < 992 && sidebar && overlay) {
-                document.querySelectorAll('.menu-link').forEach(link => {
+                document.querySelectorAll('.dg-nav-link').forEach(link => {
                     link.addEventListener('click', () => {
                         sidebar.classList.remove('open');
                         overlay.classList.remove('open');
@@ -1410,7 +729,7 @@
         document.addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
                 e.preventDefault();
-                const searchInput = document.querySelector('.topbar-search input');
+                const searchInput = document.getElementById('employee-search-input');
                 if (searchInput) searchInput.focus();
             }
         });
