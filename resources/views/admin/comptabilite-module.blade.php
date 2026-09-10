@@ -216,11 +216,11 @@
 
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <span class="text-muted fs-7">Solde période</span>
-                                <span class="fw-bold fs-5 text-dark">{{ number_format((float) ($bank['amount'] ?? 0), 0, ',', ' ') }} FCFA</span>
+                                <span class="fw-bold fs-5 text-dark">{{ money((float) ($bank['amount'] ?? 0)) }}</span>
                             </div>
                             <div class="d-flex justify-content-between align-items-center mb-3">
                                 <span class="text-muted fs-7">Ouverture période</span>
-                                <span class="fw-bold fs-7 text-dark">{{ number_format((float) ($bank['period_initial_balance'] ?? 0), 0, ',', ' ') }} FCFA</span>
+                                <span class="fw-bold fs-7 text-dark">{{ money((float) ($bank['period_initial_balance'] ?? 0)) }}</span>
                             </div>
 
                             <div class="d-flex justify-content-between align-items-center mb-4">
@@ -233,7 +233,7 @@
                             <div class="d-flex justify-content-between align-items-center bg-light rounded-3 px-3 py-2 mb-4">
                                 <span class="text-muted fs-7">Mouvement</span>
                                 <span class="fw-bold {{ ($bank['movement_direction'] ?? 'up') === 'up' ? 'text-success' : 'text-danger' }}">
-                                    {{ (($bank['movement_direction'] ?? 'up') === 'up' ? '+' : '-') }}{{ number_format((float) ($bank['movement_amount'] ?? 0), 0, ',', ' ') }} FCFA
+                                    {{ (($bank['movement_direction'] ?? 'up') === 'up' ? '+' : '-') }}{{ money((float) ($bank['movement_amount'] ?? 0)) }}
                                 </span>
                             </div>
 
@@ -559,7 +559,7 @@
                 let bankDetailsCurrentBalance = 0;
 
                 function formatAmount(value) {
-                    return new Intl.NumberFormat('fr-FR').format(Number(value || 0)) + ' FCFA';
+                    return window.formatMoney(Number(value || 0));
                 }
 
                 function getFilteredRows() {
@@ -609,8 +609,8 @@
                         const badgeClass = isCredit ? 'badge-light-success' : 'badge-light-warning';
                         const amountClass = isCredit ? 'text-success' : 'text-danger';
                         const sign = isCredit ? '+' : '-';
-                        const entryAmount = isCredit ? formatAmount(row.amount) : '0 FCFA';
-                        const exitAmount = !isCredit ? formatAmount(row.amount) : '0 FCFA';
+                        const entryAmount = isCredit ? formatAmount(row.amount) : window.formatMoney(0);
+                        const exitAmount = !isCredit ? formatAmount(row.amount) : window.formatMoney(0);
 
                         return '<tr data-row-id="' + row.id + '">' +
                             '<td><input type="checkbox" class="bank-details-select-row" value="' + row.id + '" /></td>' +
@@ -661,8 +661,8 @@
                         '<div class="title">' + title + '</div>' +
                         '<div class="meta">' + new Date().toLocaleDateString('fr-FR') + '</div>' +
                         '<table><thead><tr><th>Date</th><th>Libellé</th><th>Type</th><th>Entrée</th><th>Sortie</th></tr></thead><tbody>' + rows.map((row) => {
-                            const entry = row.type === 'credit' ? '<span class="success">' + formatAmount(row.amount) + '</span>' : '0 FCFA';
-                            const exit = row.type === 'debit' ? '<span class="danger">' + formatAmount(row.amount) + '</span>' : '0 FCFA';
+                            const entry = row.type === 'credit' ? '<span class="success">' + formatAmount(row.amount) + '</span>' : window.formatMoney(0);
+                            const exit = row.type === 'debit' ? '<span class="danger">' + formatAmount(row.amount) + '</span>' : window.formatMoney(0);
                             return '<tr><td>' + row.date + '</td><td>' + row.label + '</td><td><span class="badge">' + row.typeLabel + '</span></td><td>' + entry + '</td><td>' + exit + '</td></tr>';
                         }).join('') + '</tbody></table></body></html>';
 
@@ -709,8 +709,8 @@
                                             row.date,
                                             row.label,
                                             row.typeLabel,
-                                            row.type === 'credit' ? formatAmount(row.amount) : '0 FCFA',
-                                            row.type === 'debit' ? formatAmount(row.amount) : '0 FCFA',
+                                            row.type === 'credit' ? formatAmount(row.amount) : window.formatMoney(0),
+                                            row.type === 'debit' ? formatAmount(row.amount) : window.formatMoney(0),
                                         ])
                                     ]
                                 }
@@ -904,8 +904,8 @@
                         document.getElementById('bankDetailsBank').textContent = bank;
                         document.getElementById('bankDetailsNumber').textContent = number;
                         document.getElementById('bankDetailsType').textContent = type === 'compte_courant' ? 'Compte courant' : type === 'epargne' ? 'Compte épargne' : 'Mobile money';
-                        document.getElementById('bankDetailsAmount').textContent = new Intl.NumberFormat('fr-FR').format(amount) + ' FCFA';
-                        document.getElementById('bankDetailsMovement').textContent = label + ' - ' + (status === 'credit' ? '+' : '-') + new Intl.NumberFormat('fr-FR').format(movement) + ' FCFA';
+                        document.getElementById('bankDetailsAmount').textContent = window.formatMoney(amount);
+                        document.getElementById('bankDetailsMovement').textContent = label + ' - ' + (status === 'credit' ? '+' : '-') + window.formatMoney(movement);
 
                         bankDetailsRows = (transactions.length ? transactions.map((tx, index) => ({
                             id: index + 1,
@@ -980,9 +980,9 @@
                                     </div>
                                     <span class="badge {{ $account->is_active ? 'badge-light-success' : 'badge-light-secondary' }}">{{ $account->is_active ? 'Actif' : 'Inactif' }}</span>
                                 </div>
-                                <div class="fs-3 fw-bold text-dark">{{ number_format((float) ($account->period_balance ?? $account->balance), 0, ',', ' ') }} FCFA</div>
-                                <div class="text-muted fs-7 mt-2">Ouverture période: {{ number_format((float) ($account->period_initial_balance ?? $account->initial_balance), 0, ',', ' ') }} FCFA</div>
-                                <div class="text-muted fs-8 mt-1">Initial création: {{ number_format((float) $account->initial_balance, 0, ',', ' ') }} FCFA</div>
+                                <div class="fs-3 fw-bold text-dark">{{ money((float) ($account->period_balance ?? $account->balance)) }}</div>
+                                <div class="text-muted fs-7 mt-2">Ouverture période: {{ money((float) ($account->period_initial_balance ?? $account->initial_balance)) }}</div>
+                                <div class="text-muted fs-8 mt-1">Initial création: {{ money((float) $account->initial_balance) }}</div>
 
                                 <div class="d-flex gap-2 mt-4 flex-wrap">
                                     <button type="button" class="btn btn-sm btn-light-primary" data-bs-toggle="modal" data-bs-target="#cashAccountDetailsModal-{{ $account->id }}" title="Voir les détails" aria-label="Voir les détails de {{ $account->name }}">👁 Voir</button>
@@ -1020,9 +1020,9 @@
                                         $accountExits = $accountMovements->where('movement_type', 'exit')->sum('amount');
                                     @endphp
                                     <div class="row g-3 mb-5">
-                                        <div class="col-md-4"><div class="border rounded p-3"><div class="text-muted fs-8 text-uppercase">Solde période</div><div class="fs-4 fw-bold">{{ number_format((float) ($account->period_balance ?? $account->balance), 0, ',', ' ') }} FCFA</div></div></div>
-                                        <div class="col-md-4"><div class="border rounded p-3"><div class="text-muted fs-8 text-uppercase">Total entrées</div><div class="fs-4 fw-bold text-success">{{ number_format((float) $accountEntries, 0, ',', ' ') }} FCFA</div></div></div>
-                                        <div class="col-md-4"><div class="border rounded p-3"><div class="text-muted fs-8 text-uppercase">Total sorties</div><div class="fs-4 fw-bold text-danger">{{ number_format((float) $accountExits, 0, ',', ' ') }} FCFA</div></div></div>
+                                        <div class="col-md-4"><div class="border rounded p-3"><div class="text-muted fs-8 text-uppercase">Solde période</div><div class="fs-4 fw-bold">{{ money((float) ($account->period_balance ?? $account->balance)) }}</div></div></div>
+                                        <div class="col-md-4"><div class="border rounded p-3"><div class="text-muted fs-8 text-uppercase">Total entrées</div><div class="fs-4 fw-bold text-success">{{ money((float) $accountEntries) }}</div></div></div>
+                                        <div class="col-md-4"><div class="border rounded p-3"><div class="text-muted fs-8 text-uppercase">Total sorties</div><div class="fs-4 fw-bold text-danger">{{ money((float) $accountExits) }}</div></div></div>
                                     </div>
                                     @if($accountMovements->isEmpty())
                                         <div class="alert alert-light-info mb-0">Aucun mouvement pour cette caisse sur la période sélectionnée.</div>
@@ -1036,7 +1036,7 @@
                                                             <td>{{ $movement->movement_date?->format('d/m/Y') ?? '-' }}</td>
                                                             <td><span class="fw-bold">{{ $movement->label }}</span>@if($movement->description)<small class="d-block text-muted">{{ $movement->description }}</small>@endif</td>
                                                             <td><span class="badge {{ $movement->movement_type === 'entry' ? 'badge-light-success' : 'badge-light-danger' }}">{{ $movement->movement_type === 'entry' ? 'Entrée' : 'Sortie' }}</span></td>
-                                                            <td class="fw-bold">{{ number_format((float) $movement->amount, 0, ',', ' ') }} FCFA</td>
+                                                            <td class="fw-bold">{{ money((float) $movement->amount) }}</td>
                                                             <td>{{ ucfirst($movement->payment_mode ?? 'cash') }}</td>
                                                             <td>{{ $movement->reference ?: '-' }}</td>
                                                         </tr>
@@ -1503,7 +1503,7 @@
                                         </div>
                                         <div class="d-flex justify-content-between align-items-center">
                                             <span class="muted-label">Solde</span>
-                                            <span class="fw-bold text-dark">{{ number_format((float) $account->balance, 0, ',', ' ') }} FCFA</span>
+                                            <span class="fw-bold text-dark">{{ money((float) $account->balance) }}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -1539,7 +1539,7 @@
                                     </div>
                                     <div class="d-flex justify-content-between align-items-center">
                                         <span class="muted-label">Solde</span>
-                                        <span class="fw-bold text-dark">{{ number_format((float) $account->current_balance, 0, ',', ' ') }} FCFA</span>
+                                        <span class="fw-bold text-dark">{{ money((float) $account->current_balance) }}</span>
                                     </div>
                                 </div>
                             @empty
@@ -1582,7 +1582,7 @@
                                         <small class="text-muted">{{ $movement->cashAccount?->name ?? 'Caisse' }} · {{ $movement->movement_date?->format('d/m/Y') ?? '-' }}</small>
                                     </div>
                                     <span class="fw-bold {{ $movement->movement_type === 'entry' ? 'text-success' : 'text-danger' }}">
-                                        {{ $movement->movement_type === 'entry' ? '+' : '-' }}{{ number_format((float) $movement->amount, 0, ',', ' ') }} FCFA
+                                        {{ $movement->movement_type === 'entry' ? '+' : '-' }}{{ money((float) $movement->amount) }}
                                     </span>
                                 </div>
                             @empty
@@ -1608,7 +1608,7 @@
                                         <small class="text-muted">{{ $transfer->transaction_date?->format('d/m/Y') ?? '-' }} · {{ $transfer->bankAccount?->name ?? 'Compte' }}</small>
                                     </div>
                                     <span class="fw-bold {{ $transfer->transaction_type === 'credit' ? 'text-success' : 'text-danger' }}">
-                                        {{ $transfer->transaction_type === 'credit' ? '+' : '-' }}{{ number_format((float) $transfer->amount, 0, ',', ' ') }} FCFA
+                                        {{ $transfer->transaction_type === 'credit' ? '+' : '-' }}{{ money((float) $transfer->amount) }}
                                     </span>
                                 </div>
                             @empty
@@ -1632,7 +1632,7 @@
                                         <small class="text-muted">{{ $operation->bankAccount?->name ?? 'Banque' }} · {{ $operation->transaction_date?->format('d/m/Y') ?? '-' }}</small>
                                     </div>
                                     <span class="fw-bold {{ $operation->transaction_type === 'credit' ? 'text-success' : 'text-danger' }}">
-                                        {{ $operation->transaction_type === 'credit' ? '+' : '-' }}{{ number_format((float) $operation->amount, 0, ',', ' ') }} FCFA
+                                        {{ $operation->transaction_type === 'credit' ? '+' : '-' }}{{ money((float) $operation->amount) }}
                                     </span>
                                 </div>
                             @empty
@@ -1991,24 +1991,24 @@
                 <div class="finance-chart-panel mt-5">
                     <div class="finance-chart-header">Détail par utilisateur</div>
                     <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>#</th><th>Utilisateur</th><th>CA Factures</th><th>CA Services</th><th>CA Total</th><th>Encaissé</th><th>Reste</th></tr></thead><tbody>
-                    @forelse($commercialRows ?? [] as $row)<tr><td>{{ $loop->iteration }}</td><td class="fw-bold">{{ $row['user'] }}</td><td>{{ number_format($row['invoices'], 0, ',', ' ') }} FCFA</td><td>{{ number_format($row['services'], 0, ',', ' ') }} FCFA</td><td class="fw-bold">{{ number_format($row['total'], 0, ',', ' ') }} FCFA</td><td>{{ number_format($row['paid'], 0, ',', ' ') }} FCFA</td><td>{{ number_format($row['remaining'], 0, ',', ' ') }} FCFA</td></tr>@empty<tr><td colspan="7" class="text-center text-muted">Aucune vente sur cette période.</td></tr>@endforelse
+                    @forelse($commercialRows ?? [] as $row)<tr><td>{{ $loop->iteration }}</td><td class="fw-bold">{{ $row['user'] }}</td><td>{{ money($row['invoices']) }}</td><td>{{ money($row['services']) }}</td><td class="fw-bold">{{ money($row['total']) }}</td><td>{{ money($row['paid']) }}</td><td>{{ money($row['remaining']) }}</td></tr>@empty<tr><td colspan="7" class="text-center text-muted">Aucune vente sur cette période.</td></tr>@endforelse
                     </tbody></table></div>
                 </div>
                 <div class="finance-chart-panel mt-5">
                     <div class="finance-chart-header">Dépenses globales</div>
                     <div class="finance-kpi-grid p-4 mb-0">
-                        <div class="finance-kpi"><div class="icon">🚚</div><div><span class="value">{{ number_format($expenseTotal ?? 0, 0, ',', ' ') }} FCFA</span><span class="label">Total dépenses<br><small>Caisse + Banque + Fournisseurs</small></span></div></div>
-                        <div class="finance-kpi"><div class="icon" style="background:linear-gradient(135deg,#f59e0b,#e58b12)">💵</div><div><span class="value">{{ number_format($expenseTotal ?? 0, 0, ',', ' ') }} FCFA</span><span class="label">Déjà payé / décaissé<br><small>Taux : 100%</small></span></div></div>
+                        <div class="finance-kpi"><div class="icon">🚚</div><div><span class="value">{{ money($expenseTotal ?? 0) }}</span><span class="label">Total dépenses<br><small>Caisse + Banque + Fournisseurs</small></span></div></div>
+                        <div class="finance-kpi"><div class="icon" style="background:linear-gradient(135deg,#f59e0b,#e58b12)">💵</div><div><span class="value">{{ money($expenseTotal ?? 0) }}</span><span class="label">Déjà payé / décaissé<br><small>Taux : 100%</small></span></div></div>
                     </div>
                     <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Source</th><th>Catégorie</th><th>Montant total</th></tr></thead><tbody>
-                    @forelse($expenseCategories ?? [] as $row)<tr><td>{{ $row['source'] }}</td><td>{{ $row['category'] }}</td><td class="fw-bold">{{ number_format($row['amount'], 0, ',', ' ') }} FCFA</td></tr>@empty<tr><td colspan="3" class="text-center text-muted">Aucune dépense sur cette période.</td></tr>@endforelse
+                    @forelse($expenseCategories ?? [] as $row)<tr><td>{{ $row['source'] }}</td><td>{{ $row['category'] }}</td><td class="fw-bold">{{ money($row['amount']) }}</td></tr>@empty<tr><td colspan="3" class="text-center text-muted">Aucune dépense sur cette période.</td></tr>@endforelse
                     </tbody></table></div>
                 </div>
                 <div class="finance-chart-panel mt-5">
                     <div class="finance-chart-header">Évolution mensuelle des dépenses</div>
                     <div class="finance-chart-body"><canvas id="expenseMonthlyChart" height="120"></canvas></div>
                     <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Mois</th><th>Sorties de caisse</th><th>Dépenses banque (Débit)</th><th>Achats fournisseurs</th><th>Dépenses totales</th></tr></thead><tbody>
-                    @foreach($expenseMonths ?? [] as $row)<tr><td>{{ $row['label'] }}</td><td>{{ number_format($row['cash'], 0, ',', ' ') }} FCFA</td><td>{{ number_format($row['bank'], 0, ',', ' ') }} FCFA</td><td>{{ number_format($row['suppliers'], 0, ',', ' ') }} FCFA</td><td class="fw-bold">{{ number_format($row['total'], 0, ',', ' ') }} FCFA</td></tr>@endforeach
+                    @foreach($expenseMonths ?? [] as $row)<tr><td>{{ $row['label'] }}</td><td>{{ money($row['cash']) }}</td><td>{{ money($row['bank']) }}</td><td>{{ money($row['suppliers']) }}</td><td class="fw-bold">{{ money($row['total']) }}</td></tr>@endforeach
                     </tbody></table></div>
                 </div>
                 <form method="POST" action="{{ route('admin.comptabilite.rapport_financier.observations') }}" class="mt-5 p-4" style="background:#fff9e8;border-left:4px solid #f59e0b;border-radius:10px;">
@@ -2022,16 +2022,16 @@
                     <button class="btn btn-warning text-white">💾 Enregistrer</button>
                 </form>
                 <div class="finance-kpi-grid mt-5">
-                    <div class="finance-kpi"><div class="icon" style="background:linear-gradient(135deg,#38a1d6,#2480b5)">⚖</div><div><span class="value">{{ number_format($totalRealise - $expenseTotal, 0, ',', ' ') }} FCFA</span><span class="label">Résultat brut<br><small>Bénéfice généré(e) sur la période</small></span></div></div>
-                    <div class="finance-kpi"><div class="icon" style="background:linear-gradient(135deg,#a855c7,#7e3aa0)">⚖</div><div><span class="value">{{ number_format($encaisse - $expenseTotal, 0, ',', ' ') }} FCFA</span><span class="label">Résultat net encaissé<br><small>Trésorerie positive sur la période</small></span></div></div>
+                    <div class="finance-kpi"><div class="icon" style="background:linear-gradient(135deg,#38a1d6,#2480b5)">⚖</div><div><span class="value">{{ money($totalRealise - $expenseTotal) }}</span><span class="label">Résultat brut<br><small>Bénéfice généré(e) sur la période</small></span></div></div>
+                    <div class="finance-kpi"><div class="icon" style="background:linear-gradient(135deg,#a855c7,#7e3aa0)">⚖</div><div><span class="value">{{ money($encaisse - $expenseTotal) }}</span><span class="label">Résultat net encaissé<br><small>Trésorerie positive sur la période</small></span></div></div>
                 </div>
                 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
                 <script>
                     (() => {
                         const labels = @json(collect($chartData ?? [])->pluck('label')->values());
-                        const money = value => new Intl.NumberFormat('fr-FR').format(value) + ' FCFA';
+                        const money = value => window.formatMoney(value);
                         const series = @json($commercialSeries ?? []);
-                        new Chart(document.getElementById('commercialTotalsChart'), {type:'bar', data:{labels:series.map(item=>item.label),datasets:[{label:'Montant (FCFA)',data:series.map(item=>item.value),backgroundColor:['#3ecf8e','#44b3ff','#e76f51']}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:value=>money(value)}}}}});
+                        new Chart(document.getElementById('commercialTotalsChart'), {type:'bar', data:{labels:series.map(item=>item.label),datasets:[{label:'Montant ({{ currency_symbol() }})',data:series.map(item=>item.value),backgroundColor:['#3ecf8e','#44b3ff','#e76f51']}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:value=>money(value)}}}}});
                         const commercial = @json($commercialMonthly ?? []);
                         new Chart(document.getElementById('commercialMonthlyChart'), {type:'line',data:{labels:labels,datasets:commercial.map((item,index)=>({label:item.label,data:item.values,borderColor:['#08a85b','#08b9e8','#7c3aed','#f59e0b'][index%4],backgroundColor:'transparent',tension:.35,pointRadius:4}))},options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{ticks:{callback:value=>money(value)}}}}});
                         const expenses = @json($expenseMonths ?? []);

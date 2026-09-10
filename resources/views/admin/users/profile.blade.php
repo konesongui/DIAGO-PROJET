@@ -36,7 +36,7 @@
 <div class="card-header d-flex justify-content-between align-items-center"><h3 class="card-title">Mes bulletins de salaire</h3><span class="badge badge-light-primary">{{ $payrolls->count() }}</span></div>
 <div class="card-body p-0"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Période</th><th>Brut</th><th>Net à payer</th><th>Actions</th></tr></thead><tbody>
 @forelse($payrolls as $payroll)
-<tr><td>{{ \Carbon\Carbon::create()->month($payroll->month)->translatedFormat('F') }} {{ $payroll->year }}</td><td>{{ number_format($payroll->gross_salary, 0, ',', ' ') }} FCFA</td><td class="fw-bold">{{ number_format($payroll->net_salary, 0, ',', ' ') }} FCFA</td><td><a target="_blank" class="btn btn-sm btn-light-primary" href="{{ route('admin.rh.payroll.show', $payroll) }}">Voir / imprimer</a><a target="_blank" class="btn btn-sm btn-light ms-2" href="{{ route('admin.rh.payroll.pdf', $payroll) }}">PDF</a></td></tr>
+<tr><td>{{ \Carbon\Carbon::create()->month($payroll->month)->translatedFormat('F') }} {{ $payroll->year }}</td><td>{{ money($payroll->gross_salary) }}</td><td class="fw-bold">{{ money($payroll->net_salary) }}</td><td><a target="_blank" class="btn btn-sm btn-light-primary" href="{{ route('admin.rh.payroll.show', $payroll) }}">Voir / imprimer</a><a target="_blank" class="btn btn-sm btn-light ms-2" href="{{ route('admin.rh.payroll.pdf', $payroll) }}">PDF</a></td></tr>
 @empty <tr><td colspan="4" class="text-center text-muted py-8">Aucun bulletin disponible.</td></tr>@endforelse
 </tbody></table></div></div>
 </section>

@@ -47,7 +47,7 @@
         .dash-card .chart { height:260px; }
     }
 </style>
-@php $money = fn($value) => number_format((float)$value, 0, ',', ' ') . ' FCFA'; @endphp
+@php $money = fn($value) => money((float)$value); @endphp
 <div class="pilotage">
     <div class="pilotage-hero">
         <div><h2 class="mb-1">{{ __('Global overview') }}</h2><p class="mb-0 mt-2">{{ __('Consolidated view of treasury, commercial performance and human resources.') }}</p></div>
@@ -94,7 +94,7 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
-const money=v=>new Intl.NumberFormat('fr-FR').format(v)+' FCFA', labels=@json($monthLabels);
+const money=v=>window.formatMoney(v), labels=@json($monthLabels);
 new Chart(document.getElementById('revenueExpenseChart'),{type:'line',data:{labels:labels,datasets:[{label:'Revenus',data:@json($accounting['revenue_series']),borderColor:'#1b9e5a',tension:.35},{label:'Dépenses',data:@json($accounting['expense_series']),borderColor:'#e45757',tension:.35}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{ticks:{callback:money}}}}});
 const expenseCanvas=document.getElementById('expenseChart');
 if(expenseCanvas){const expenseContext=expenseCanvas.getContext('2d'),expenseGradient=expenseContext.createLinearGradient(0,0,0,250);expenseGradient.addColorStop(0,'rgba(27,79,128,.28)');expenseGradient.addColorStop(1,'rgba(27,79,128,0)');new Chart(expenseCanvas,{type:'line',data:{labels:@json($accounting['expense_categories']->keys()->values()),datasets:[{label:'Dépenses',data:@json($accounting['expense_categories']->values()),borderColor:'#1b4f80',backgroundColor:expenseGradient,fill:true,tension:.42,borderWidth:3,pointRadius:4,pointHoverRadius:6,pointBackgroundColor:'#fff',pointBorderColor:'#1b4f80',pointBorderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:context=>money(context.raw)}}},scales:{x:{grid:{display:false},ticks:{color:'#94a3b8',font:{size:10},maxRotation:0}},y:{beginAtZero:true,grid:{color:'rgba(148,163,184,.14)'},ticks:{color:'#94a3b8',callback:money}}}}});}

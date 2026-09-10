@@ -27,7 +27,7 @@
         <div class="d-flex justify-content-between align-items-center mb-3"><h3 class="fs-4 fw-bold mb-0">Bulletins de salaire</h3><a href="{{ route('admin.rh.payroll.create') }}" class="btn btn-sm btn-primary">Générer un bulletin</a></div>
         <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Période</th><th>Brut</th><th>Net à payer</th><th>Actions</th></tr></thead><tbody>
         @forelse($payrolls as $payroll)
-            <tr><td>{{ \Carbon\Carbon::create()->month($payroll->month)->translatedFormat('F') }} {{ $payroll->year }}</td><td>{{ number_format($payroll->gross_salary, 0, ',', ' ') }} FCFA</td><td class="fw-bold">{{ number_format($payroll->net_salary, 0, ',', ' ') }} FCFA</td><td><a target="_blank" class="btn btn-sm btn-light-primary" href="{{ route('admin.rh.payroll.show', $payroll) }}">Voir / imprimer</a><a target="_blank" class="btn btn-sm btn-light ms-2" href="{{ route('admin.rh.payroll.pdf', $payroll) }}">PDF</a></td></tr>
+            <tr><td>{{ \Carbon\Carbon::create()->month($payroll->month)->translatedFormat('F') }} {{ $payroll->year }}</td><td>{{ money($payroll->gross_salary) }}</td><td class="fw-bold">{{ money($payroll->net_salary) }}</td><td><a target="_blank" class="btn btn-sm btn-light-primary" href="{{ route('admin.rh.payroll.show', $payroll) }}">Voir / imprimer</a><a target="_blank" class="btn btn-sm btn-light ms-2" href="{{ route('admin.rh.payroll.pdf', $payroll) }}">PDF</a></td></tr>
         @empty <tr><td colspan="4" class="text-muted text-center">Aucun bulletin généré.</td></tr>@endforelse
         </tbody></table></div>
         @if(auth()->user()->id === $employee->user_id)

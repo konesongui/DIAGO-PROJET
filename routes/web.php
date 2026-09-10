@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\CommercialController;
 use App\Http\Controllers\Admin\ComptabiliteController;
+use App\Http\Controllers\Admin\AnnualReportController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\DemoRequestController;
 use App\Http\Controllers\Admin\DepartmentController;
@@ -178,6 +179,8 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::put('/commercial/facture-personnalisee/{invoice}', [CommercialController::class, 'updateCustomInvoice'])->name('admin.commercial.custom-invoice.update');
         Route::delete('/commercial/facture-personnalisee/{invoice}', [CommercialController::class, 'destroyCustomInvoice'])->name('admin.commercial.custom-invoice.destroy');
         Route::post('/commercial/facture-personnalisee/{invoice}/duplicate', [CommercialController::class, 'duplicateCustomInvoice'])->name('admin.commercial.custom-invoice.duplicate');
+        Route::post('/commercial/facture-personnalisee/{invoice}/emettre', [CommercialController::class, 'issueCustomInvoice'])->name('admin.commercial.custom-invoice.issue');
+        Route::post('/commercial/facture-personnalisee/{invoice}/avoir', [CommercialController::class, 'creditCustomInvoice'])->name('admin.commercial.custom-invoice.credit');
         Route::post('/commercial/facture-personnalisee/{invoice}/email', [CommercialController::class, 'emailCustomInvoice'])->name('admin.commercial.custom-invoice.email');
         Route::post('/commercial/facture-personnalisee/{invoice}/whatsapp', [CommercialController::class, 'sendCustomInvoiceWhatsApp'])->name('admin.commercial.custom-invoice.whatsapp');
         Route::get('/commercial/facture-personnalisee/{invoice}/print', [CommercialController::class, 'printCustomInvoice'])->name('admin.commercial.custom-invoice.print');
@@ -245,6 +248,17 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::patch('/setting/email', [SettingController::class, 'updateEmail'])->name('admin.settings.email.update');
         Route::patch('/setting/theme', [SettingController::class, 'updateTheme'])->name('admin.settings.theme.update');
         Route::patch('/setting/cinetpay', [SettingController::class, 'updateCinetPay'])->name('admin.settings.cinetpay.update');
+        Route::get('/comptabilite/bilans', [AnnualReportController::class, 'index'])->name('admin.bilans.index');
+        Route::get('/comptabilite/bilans/{report}', [AnnualReportController::class, 'show'])->name('admin.bilans.show');
+        Route::get('/comptabilite/bilans/{report}/pdf', [AnnualReportController::class, 'download'])->name('admin.bilans.download');
+        Route::post('/comptabilite/bilans/{report}/vu', [AnnualReportController::class, 'acknowledge'])->name('admin.bilans.acknowledge');
+        Route::get('/comptabilite/journal', [ComptabiliteController::class, 'journalComptable'])->name('admin.comptabilite.journal');
+        Route::get('/comptabilite/declaration-tva', [ComptabiliteController::class, 'declarationTva'])->name('admin.comptabilite.declaration_tva');
+        Route::patch('/comptabilite/factures-fournisseurs/{supplierInvoice}/regime', [ComptabiliteController::class, 'updateSupplierInvoiceRegime'])->name('admin.comptabilite.supplierInvoices.regime');
+        Route::patch('/setting/fiscalite/fait-generateur', [SettingController::class, 'updateTaxBasis'])->name('admin.settings.tax-basis.update');
+        Route::post('/setting/fiscalite/taux', [SettingController::class, 'storeTaxRate'])->name('admin.settings.tax-rates.store');
+        Route::patch('/setting/fiscalite/taux/{taxRate}', [SettingController::class, 'updateTaxRate'])->name('admin.settings.tax-rates.update');
+        Route::delete('/setting/fiscalite/taux/{taxRate}', [SettingController::class, 'destroyTaxRate'])->name('admin.settings.tax-rates.destroy');
         Route::post('/setting/email/test', [SettingController::class, 'testEmail'])->name('admin.settings.email.test');
         Route::post('/setting/general/renew', [SettingController::class, 'renewSubscription'])->name('admin.settings.general.renew');
         Route::get('/admin/setting', [SettingController::class, 'index']);

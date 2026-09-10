@@ -25,7 +25,12 @@ use App\Models\BankAccount;
 use App\Models\CommercialService;
 use App\Models\PosSale;
 use App\Models\InventoryAudit;
+use App\Services\AccountingPoster;
+use App\Services\DocumentNumberService;
 use App\Services\FneCertificationService;
+use App\Services\InvoiceIntegrityService;
+use App\Services\PaymentRecorder;
+use App\Services\TaxService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -314,6 +319,7 @@ class CommercialController extends AdminController
             'clients' => $clients,
             'cashAccounts' => CashAccount::where('entreprise_id', $id)->where('is_active', true)->orderBy('name')->get(),
             'modules' => $this->modules(),
+            'globalServiceCatalog' => $this->globalServiceCatalog(),
             'invoice' => null,
         ]);
     }
@@ -322,12 +328,20 @@ class CommercialController extends AdminController
     {
         $this->authorizeWorkflow($invoice);
 
+        $integrity = app(InvoiceIntegrityService::class);
+
         return $this->page('commercial-custom-invoice-show', [
             'title' => 'Facture personnalisée',
             'subtitle' => 'Détail de la facture',
             'module' => ['key' => 'facture-personnalisee', 'title' => 'Facture personnalisée'],
             'invoice' => $invoice,
             'modules' => $this->modules(),
+            'locked' => $integrity->isLocked($invoice),
+            'lockReason' => $integrity->lockReason($invoice),
+            'creditedAmount' => (float) $invoice->credited_amount,
+            'creditableAmount' => $integrity->creditableAmount($invoice),
+            'creditNotes' => \App\Models\CreditNote::where('creditable_type', $invoice::class)
+                ->where('creditable_id', $invoice->id)->latest()->get(),
         ]);
     }
 
@@ -349,6 +363,7 @@ class CommercialController extends AdminController
             'clients' => $clients,
             'cashAccounts' => CashAccount::where('entreprise_id', $id)->where('is_active', true)->orderBy('name')->get(),
             'modules' => $this->modules(),
+            'globalServiceCatalog' => $this->globalServiceCatalog(),
             'invoice' => $invoice,
         ]);
     }
@@ -400,20 +415,15 @@ class CommercialController extends AdminController
             ];
         })->values()->all();
 
-        $services = collect($request->input('global_services', []))->map(function ($serviceKey) {
-            $serviceCatalog = [
-                'mise_en_page' => 50000,
-                'conception_couverture' => 30000,
-                'correction_orthographe' => 20000,
-                'isbn' => 15000,
-                'depot_legal' => 25000,
-            ];
-            return [
+        // Le catalogue et ses tarifs viennent de la base, par entreprise :
+        // ils ne peuvent plus etre ceux d'un seul client ecrits dans le code.
+        $serviceCatalog = $this->globalServiceCatalog();
+        $services = collect($request->input('global_services', []))
+            ->map(fn ($serviceKey) => [
                 'key' => $serviceKey,
-                'label' => ucwords(str_replace('_', ' ', $serviceKey)),
-                'price' => $serviceCatalog[$serviceKey] ?? 0,
-            ];
-        })->values()->all();
+                'label' => $serviceCatalog[$serviceKey]['label'] ?? ucwords(str_replace('_', ' ', $serviceKey)),
+                'price' => $serviceCatalog[$serviceKey]['price'] ?? 0,
+            ])->values()->all();
 
         $subtotal = collect($items)->sum(fn ($item) => ((float) ($item['quantity'] ?? 0)) * ((float) ($item['price'] ?? 0)));
         $servicesTotal = collect($services)->sum(fn ($service) => (float) ($service['price'] ?? 0));
@@ -422,14 +432,27 @@ class CommercialController extends AdminController
         $discountValue = (float) ($validated['discount_value'] ?? 0);
         $discountAmount = $discountType === 'percent' ? $baseAmount * ($discountValue / 100) : ($discountType === 'amount' ? $discountValue : 0);
         $netAfterDiscount = max(0, $baseAmount - $discountAmount);
-        $vat = $netAfterDiscount * 0.18;
-        $ttc = $netAfterDiscount + $vat;
+
+        // Le taux vient du parametrage de l'entreprise, jamais du code.
+        $taxService = app(TaxService::class);
+        $entreprise = auth()->user()->entreprise;
+        $currency = $taxService->currencyFor($entreprise);
+        $taxRate = $taxService->resolveRate(
+            auth()->user()->entreprise_id,
+            $request->input('tax_rate_id'),
+            $validated['quote_date'] ?? null
+        );
+        $taxBreakdown = $taxService->breakdown($netAfterDiscount, $taxRate, $currency);
+        $vat = $taxBreakdown['tax_amount'];
+        $ttc = $taxBreakdown['total_ttc'];
 
         $clientName = $validated['new_client_name'] ?? $request->input('customer_name') ?? 'Client';
         $clientPhone = $validated['new_client_phone'] ?? $request->input('customer_phone') ?? '';
         $clientEmail = $validated['new_client_email'] ?? $request->input('customer_email') ?? '';
 
-        $reference = 'FC-' . now()->format('Ymd') . '-' . str_pad((CustomInvoice::whereDate('created_at', now()->toDateString())->count() + 1), 4, '0', STR_PAD_LEFT);
+        // Numero attribue par le compteur : deux validations simultanees ne
+        // peuvent plus obtenir la meme reference.
+        $reference = app(DocumentNumberService::class)->next(auth()->user()->entreprise_id, 'custom_invoice');
 
         $paidAmountInput = (float) ($validated['paid_amount'] ?? 0);
         $paymentMethod = $validated['payment_method'] ?? ($paidAmountInput > 0 ? 'cash' : '');
@@ -457,7 +480,10 @@ class CommercialController extends AdminController
             'total_ht' => $baseAmount,
             'total_discount' => $discountAmount,
             'subtotal_after_discount' => $netAfterDiscount,
-            'vat_amount' => $vat,
+            'tax_amount' => $vat,
+            'tax_rate_id' => $taxBreakdown['rate_id'],
+            'tax_rate' => $taxBreakdown['rate_value'],
+            'tax_regime' => $taxBreakdown['regime'],
             'total_ttc' => $ttc,
             'paid_amount' => $paidAmountInput,
             'paid_at' => $paidAmountInput > 0 ? now() : null,
@@ -466,6 +492,7 @@ class CommercialController extends AdminController
 
         if ($paidAmountInput > 0) {
             $this->registerCustomInvoiceCashPayment($invoice, $paidAmountInput, $paymentMethod, $cashAccountId, 'Paiement immédiat facture personnalisée');
+            app(PaymentRecorder::class)->record($invoice, $paidAmountInput, $paymentMethod, now(), auth()->id());
         }
 
         $request->session()->flash('success', 'La facture personnalisée a bien été enregistrée.');
@@ -476,6 +503,12 @@ class CommercialController extends AdminController
     public function updateCustomInvoice(Request $request, CustomInvoice $invoice)
     {
         $this->authorizeWorkflow($invoice);
+
+        try {
+            app(InvoiceIntegrityService::class)->assertModifiable($invoice);
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['invoice' => $e->getMessage()]);
+        }
 
         $validated = $request->validate([
             'customer' => ['nullable', 'string', 'max:255'],
@@ -520,16 +553,15 @@ class CommercialController extends AdminController
             'additional_options' => $item['additional_options'] ?? null,
         ])->values()->all();
 
-        $services = collect($request->input('global_services', []))->map(function ($serviceKey) {
-            $serviceCatalog = [
-                'mise_en_page' => 50000,
-                'conception_couverture' => 30000,
-                'correction_orthographe' => 20000,
-                'isbn' => 15000,
-                'depot_legal' => 25000,
-            ];
-            return ['key' => $serviceKey, 'label' => ucwords(str_replace('_', ' ', $serviceKey)), 'price' => $serviceCatalog[$serviceKey] ?? 0];
-        })->values()->all();
+        // Le catalogue et ses tarifs viennent de la base, par entreprise :
+        // ils ne peuvent plus etre ceux d'un seul client ecrits dans le code.
+        $serviceCatalog = $this->globalServiceCatalog();
+        $services = collect($request->input('global_services', []))
+            ->map(fn ($serviceKey) => [
+                'key' => $serviceKey,
+                'label' => $serviceCatalog[$serviceKey]['label'] ?? ucwords(str_replace('_', ' ', $serviceKey)),
+                'price' => $serviceCatalog[$serviceKey]['price'] ?? 0,
+            ])->values()->all();
 
         $subtotal = collect($items)->sum(fn ($item) => ((float) ($item['quantity'] ?? 0)) * ((float) ($item['price'] ?? 0)));
         $servicesTotal = collect($services)->sum(fn ($service) => (float) ($service['price'] ?? 0));
@@ -538,8 +570,19 @@ class CommercialController extends AdminController
         $discountValue = (float) ($validated['discount_value'] ?? 0);
         $discountAmount = $discountType === 'percent' ? $baseAmount * ($discountValue / 100) : ($discountType === 'amount' ? $discountValue : 0);
         $netAfterDiscount = max(0, $baseAmount - $discountAmount);
-        $vat = $netAfterDiscount * 0.18;
-        $ttc = $netAfterDiscount + $vat;
+
+        // Le taux vient du parametrage de l'entreprise, jamais du code.
+        $taxService = app(TaxService::class);
+        $entreprise = auth()->user()->entreprise;
+        $currency = $taxService->currencyFor($entreprise);
+        $taxRate = $taxService->resolveRate(
+            auth()->user()->entreprise_id,
+            $request->input('tax_rate_id'),
+            $validated['quote_date'] ?? null
+        );
+        $taxBreakdown = $taxService->breakdown($netAfterDiscount, $taxRate, $currency);
+        $vat = $taxBreakdown['tax_amount'];
+        $ttc = $taxBreakdown['total_ttc'];
 
         $previousPaidAmount = (float) ($invoice->paid_amount ?? 0);
         $paidAmountInput = $request->filled('paid_amount') ? (float) $validated['paid_amount'] : $previousPaidAmount;
@@ -565,7 +608,10 @@ class CommercialController extends AdminController
             'total_ht' => $baseAmount,
             'total_discount' => $discountAmount,
             'subtotal_after_discount' => $netAfterDiscount,
-            'vat_amount' => $vat,
+            'tax_amount' => $vat,
+            'tax_rate_id' => $taxBreakdown['rate_id'],
+            'tax_rate' => $taxBreakdown['rate_value'],
+            'tax_regime' => $taxBreakdown['regime'],
             'total_ttc' => $ttc,
             'paid_amount' => $paidAmountInput,
             'paid_at' => $paidAmountInput > 0 ? ($invoice->paid_at ?? now()) : null,
@@ -573,18 +619,37 @@ class CommercialController extends AdminController
         ]);
 
         if ($request->filled('paid_amount') && (float) $validated['paid_amount'] > 0) {
-            $this->registerCustomInvoiceCashPayment($invoice, max(0, (float) $validated['paid_amount'] - $previousPaidAmount), $paymentMethod, $cashAccountId, 'Paiement facture personnalisée');
+            $complement = max(0, (float) $validated['paid_amount'] - $previousPaidAmount);
+            $this->registerCustomInvoiceCashPayment($invoice, $complement, $paymentMethod, $cashAccountId, 'Paiement facture personnalisée');
+            app(PaymentRecorder::class)->record($invoice, $complement, $paymentMethod, now(), auth()->id());
         }
 
         return redirect()->route('admin.commercial.custom-invoice.show', $invoice)->with('success', 'La facture personnalisée a bien été mise à jour.');
+    }
+
+    /**
+     * Prestations forfaitaires proposees sur la facture personnalisee.
+     * Chaque entreprise gere les siennes depuis le module Services.
+     */
+    protected function globalServiceCatalog(): array
+    {
+        return CommercialService::where('entreprise_id', auth()->user()->entreprise_id)
+            ->where('is_global', true)->where('is_active', true)
+            ->whereNotNull('code')->orderBy('name')
+            ->get()
+            ->mapWithKeys(fn (CommercialService $service) => [
+                $service->code => ['label' => $service->name, 'price' => (float) $service->price],
+            ])->all();
     }
 
     public function destroyCustomInvoice(CustomInvoice $invoice)
     {
         $this->authorizeWorkflow($invoice);
 
-        if ((float) $invoice->paid_amount > 0 || ! empty($invoice->paid_at)) {
-            return back()->withErrors(['invoice' => 'Impossible de supprimer une facture avec paiement déjà enregistré.']);
+        try {
+            app(InvoiceIntegrityService::class)->assertModifiable($invoice);
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['invoice' => $e->getMessage()]);
         }
 
         $invoice->delete();
@@ -592,12 +657,56 @@ class CommercialController extends AdminController
         return redirect()->route('admin.commercial.custom-invoice.index')->with('success', 'La facture personnalisée a été supprimée.');
     }
 
+    /**
+     * Emet la facture : elle devient un document opposable et se fige.
+     * Toute correction passera desormais par un avoir.
+     */
+    public function issueCustomInvoice(CustomInvoice $invoice)
+    {
+        $this->authorizeWorkflow($invoice);
+
+        try {
+            app(InvoiceIntegrityService::class)->issue($invoice);
+            app(AccountingPoster::class)->postCustomInvoice($invoice->refresh(), auth()->id());
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['invoice' => $e->getMessage()]);
+        }
+
+        return back()->with('success', 'Facture émise. Elle ne peut plus être modifiée : utilisez un avoir pour la corriger.');
+    }
+
+    /** Emet un avoir, total ou partiel, sur une facture deja emise. */
+    public function creditCustomInvoice(Request $request, CustomInvoice $invoice)
+    {
+        $this->authorizeWorkflow($invoice);
+
+        $integrity = app(InvoiceIntegrityService::class);
+
+        $data = $request->validate([
+            'amount' => ['nullable', 'numeric', 'gt:0'],
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+            'full' => ['nullable', 'boolean'],
+        ]);
+
+        $amount = ! empty($data['full'])
+            ? $integrity->creditableAmount($invoice)
+            : (float) ($data['amount'] ?? 0);
+
+        try {
+            $note = $integrity->credit($invoice, $amount, $data['reason'], auth()->id());
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['credit' => $e->getMessage()]);
+        }
+
+        return back()->with('success', "Avoir {$note->reference} émis pour un montant de " . number_format((float) $note->total_ttc, 2, ',', ' ') . '.');
+    }
+
     public function duplicateCustomInvoice(CustomInvoice $invoice)
     {
         $this->authorizeWorkflow($invoice);
 
         $clone = $invoice->replicate();
-        $clone->reference = 'FC-' . now()->format('Ymd') . '-' . str_pad((CustomInvoice::whereDate('created_at', now()->toDateString())->count() + 1), 4, '0', STR_PAD_LEFT);
+        $clone->reference = app(DocumentNumberService::class)->next(auth()->user()->entreprise_id, 'custom_invoice');
         $clone->status = 'draft';
         $clone->paid_amount = 0;
         $clone->paid_at = null;
@@ -670,7 +779,7 @@ class CommercialController extends AdminController
             'movement_type' => 'entry',
             'label' => $label,
             'amount' => $amount,
-            'currency' => 'XOF',
+            'currency' => company_currency()['code'],
             'payment_mode' => 'cash',
             'reference' => 'CUST-INV-' . $invoice->reference . '-' . now()->format('YmdHis'),
             'description' => 'Paiement d’une facture personnalisée : ' . $invoice->reference,
@@ -697,6 +806,10 @@ class CommercialController extends AdminController
 
         if ($paymentAmount > 0) {
             $this->registerCustomInvoiceCashPayment($invoice, $paymentAmount, $paymentMethod, $cashAccountId, 'Paiement facture personnalisée');
+
+            // Reglement date, pour la TVA sur les encaissements.
+            app(PaymentRecorder::class)->record($invoice, $paymentAmount, $paymentMethod, now(), auth()->id());
+            app(AccountingPoster::class)->postCustomerPayment($invoice, $paymentAmount, $paymentMethod, now(), auth()->id());
         }
 
         $invoice->update([
@@ -1155,6 +1268,7 @@ class CommercialController extends AdminController
             'clients' => CommercialClient::where('entreprise_id', $id)->orderBy('name')->get(),
             'cashAccounts' => CashAccount::where('entreprise_id', $id)->where('is_active', true)->orderBy('name')->get(),
             'bankAccounts' => BankAccount::where('entreprise_id', $id)->orderBy('name')->get(),
+            'taxRates' => app(TaxService::class)->ratesFor($id),
         ]);
     }
 
@@ -1169,6 +1283,7 @@ class CommercialController extends AdminController
             'lines.*.unit_price' => ['required', 'numeric', 'min:0'],
             'payment_method' => ['required', 'in:cash,bank'],
             'paid_amount' => ['required', 'numeric', 'min:0'],
+            'tax_rate_id' => ['nullable', 'integer'],
             'cash_account_id' => ['required_if:payment_method,cash', 'nullable', 'integer'],
             'bank_account_id' => ['required_if:payment_method,bank', 'nullable', 'integer'],
         ]);
@@ -1177,11 +1292,22 @@ class CommercialController extends AdminController
         $total = collect($data['lines'])->sum(fn ($line) => (float) $line['quantity'] * (float) $line['unit_price']);
         abort_if((float) $data['paid_amount'] < $total, 422, 'Le montant payé est inférieur au total de la vente.');
         $change = (float) $data['paid_amount'] - $total;
-        DB::transaction(function () use ($data, $id, $client, $total, $change) {
+
+        // En caisse, le prix saisi est celui paye par le client : la taxe est
+        // extraite du total, jamais ajoutee. Le montant encaisse ne bouge pas.
+        $taxService = app(TaxService::class);
+        $posCurrency = $taxService->currencyFor(auth()->user()->entreprise);
+        $posTax = $taxService->breakdownFromTtc(
+            $total,
+            $taxService->resolveRate($id, $data['tax_rate_id'] ?? null),
+            $posCurrency
+        );
+
+        DB::transaction(function () use ($data, $id, $client, $total, $change, $posTax, $posCurrency) {
             if ($data['payment_method'] === 'cash') {
                 $account = CashAccount::where('entreprise_id', $id)->where('is_active', true)->lockForUpdate()->findOrFail($data['cash_account_id']);
                 $account->increment('balance', $total);
-                CashMovement::create(['entreprise_id'=>$id, 'cash_account_id'=>$account->id, 'movement_type'=>'entry', 'label'=>'Vente caisse', 'amount'=>$total, 'currency'=>'XOF', 'payment_mode'=>'cash', 'reference'=>'POS-' . now()->format('YmdHis'), 'description'=>'Vente au point de vente', 'movement_date'=>now()->toDateString()]);
+                CashMovement::create(['entreprise_id'=>$id, 'cash_account_id'=>$account->id, 'movement_type'=>'entry', 'label'=>'Vente caisse', 'amount'=>$total, 'currency'=>company_currency()['code'], 'payment_mode'=>'cash', 'reference'=>'POS-' . now()->format('YmdHis'), 'description'=>'Vente au point de vente', 'movement_date'=>now()->toDateString()]);
                 $cashId = $account->id;
                 $bankId = null;
             } else {
@@ -1192,7 +1318,11 @@ class CommercialController extends AdminController
                 $cashId = null;
                 $bankId = $account->id;
             }
-            PosSale::create(['entreprise_id'=>$id, 'client_id'=>$client?->id, 'client_name'=>$client?->name, 'lines'=>$data['lines'], 'total'=>$total, 'paid_amount'=>$data['paid_amount'], 'change_amount'=>$change, 'payment_method'=>$data['payment_method'], 'cash_account_id'=>$cashId, 'bank_account_id'=>$bankId, 'status'=>'completed']);
+            $sale = PosSale::create(['entreprise_id'=>$id, 'client_id'=>$client?->id, 'client_name'=>$client?->name, 'lines'=>$data['lines'], 'total'=>$total, 'paid_amount'=>$data['paid_amount'], 'change_amount'=>$change, 'payment_method'=>$data['payment_method'], 'cash_account_id'=>$cashId, 'bank_account_id'=>$bankId, 'status'=>'completed',
+                'total_ht'=>$posTax['base_ht'], 'tax_amount'=>$posTax['tax_amount'], 'tax_rate'=>$posTax['rate_value'],
+                'tax_regime'=>$posTax['regime'], 'tax_rate_id'=>$posTax['rate_id'], 'currency'=>$posCurrency]);
+
+            app(AccountingPoster::class)->postPosSale($sale, auth()->id());
         });
         return back()->with('success', 'Vente enregistrée et paiement comptabilisé.');
     }
@@ -1246,7 +1376,7 @@ class CommercialController extends AdminController
                 if ($sale->payment_method === 'cash') {
                     $account = CashAccount::where('entreprise_id', $id)->lockForUpdate()->findOrFail($sale->cash_account_id);
                     $delta > 0 ? $account->increment('balance', $delta) : $account->decrement('balance', abs($delta));
-                    CashMovement::create(['entreprise_id'=>$id, 'cash_account_id'=>$account->id, 'movement_type'=>$delta > 0 ? 'entry' : 'exit', 'label'=>'Correction vente POS', 'amount'=>abs($delta), 'currency'=>'XOF', 'payment_mode'=>'cash', 'reference'=>'POS-COR-' . now()->format('YmdHis'), 'description'=>'Correction après modification de vente', 'movement_date'=>now()->toDateString()]);
+                    CashMovement::create(['entreprise_id'=>$id, 'cash_account_id'=>$account->id, 'movement_type'=>$delta > 0 ? 'entry' : 'exit', 'label'=>'Correction vente POS', 'amount'=>abs($delta), 'currency'=>company_currency()['code'], 'payment_mode'=>'cash', 'reference'=>'POS-COR-' . now()->format('YmdHis'), 'description'=>'Correction après modification de vente', 'movement_date'=>now()->toDateString()]);
                 } else {
                     $account = BankAccount::where('entreprise_id', $id)->lockForUpdate()->findOrFail($sale->bank_account_id);
                     $delta > 0 ? $account->increment('current_balance', $delta) : $account->decrement('current_balance', abs($delta));
@@ -1267,7 +1397,7 @@ class CommercialController extends AdminController
             if ($sale->payment_method === 'cash') {
                 $account = CashAccount::where('entreprise_id', $id)->lockForUpdate()->findOrFail($sale->cash_account_id);
                 $account->decrement('balance', $sale->total);
-                CashMovement::create(['entreprise_id'=>$id, 'cash_account_id'=>$account->id, 'movement_type'=>'exit', 'label'=>'Annulation vente POS', 'amount'=>$sale->total, 'currency'=>'XOF', 'payment_mode'=>'cash', 'reference'=>'POS-ANN-' . now()->format('YmdHis'), 'description'=>'Annulation de la vente au point de vente', 'movement_date'=>now()->toDateString()]);
+                CashMovement::create(['entreprise_id'=>$id, 'cash_account_id'=>$account->id, 'movement_type'=>'exit', 'label'=>'Annulation vente POS', 'amount'=>$sale->total, 'currency'=>company_currency()['code'], 'payment_mode'=>'cash', 'reference'=>'POS-ANN-' . now()->format('YmdHis'), 'description'=>'Annulation de la vente au point de vente', 'movement_date'=>now()->toDateString()]);
             } else {
                 $account = BankAccount::where('entreprise_id', $id)->lockForUpdate()->findOrFail($sale->bank_account_id);
                 $account->decrement('current_balance', $sale->total);
@@ -1331,6 +1461,7 @@ class CommercialController extends AdminController
             'clients' => CommercialClient::where('entreprise_id', $id)->orderBy('name')->get(),
             'quoteArticles' => $this->quoteArticles($id),
             'quoteServices' => CommercialService::where('entreprise_id', $id)->where('is_active', true)->orderBy('name')->get(['name', 'price', 'unit']),
+            'taxRates' => app(TaxService::class)->ratesFor($id),
         ]);
     }
 
@@ -1371,6 +1502,7 @@ class CommercialController extends AdminController
             'subject' => ['nullable','string','max:2000'],
             'total_discount' => ['nullable','numeric','min:0'],
             'tax_rate' => ['nullable','numeric','min:0','max:100'],
+            'tax_rate_id' => ['nullable','integer'],
             'lines' => ['required','array','min:1'],
             'lines.*.item_name' => ['required','string','max:190'],
             'lines.*.quantity' => ['required','numeric','gt:0'],
@@ -1385,8 +1517,14 @@ class CommercialController extends AdminController
         $totalHt = collect($data['lines'])->sum(fn ($line) => (float) $line['quantity'] * (float) $line['unit_price']);
         $discount = min($totalHt, (float) ($data['total_discount'] ?? 0));
         $netHt = $totalHt - $discount;
-        $taxRate = (float) ($data['tax_rate'] ?? 0);
-        $taxAmount = $netHt * $taxRate / 100;
+        // Le taux est resolu depuis le parametrage de l'entreprise : c'est lui
+        // qui porte le regime fiscal, jamais la valeur du montant.
+        $taxService = app(TaxService::class);
+        $currency = $taxService->currencyFor(auth()->user()->entreprise);
+        $rate = $taxService->resolveRate($id, $data['tax_rate_id'] ?? null, $data['quote_date'] ?? null);
+        $breakdown = $taxService->breakdown($netHt, $rate, $currency);
+        $taxRate = $breakdown['rate_value'];
+        $taxAmount = $breakdown['tax_amount'];
         $quote = $quote ?: new CommercialQuote();
         $quote->fill([
             'entreprise_id'=>$id, 'client_id'=>$client->id, 'client_name'=>$client->name,
@@ -1394,12 +1532,13 @@ class CommercialController extends AdminController
             'payment_terms'=>$data['payment_terms'] ?? null, 'delivery_terms'=>$data['delivery_terms'] ?? null,
             'delivery_location'=>$data['delivery_location'] ?? null, 'payment_method'=>$data['payment_method'] ?? null,
             'subject'=>$data['subject'] ?? null, 'total_ht'=>$totalHt, 'total_discount'=>$discount,
-            'net_ht'=>$netHt, 'tax_rate'=>$taxRate, 'tax_amount'=>$taxAmount, 'total_ttc'=>$netHt + $taxAmount,
+            'net_ht'=>$netHt, 'tax_rate'=>$taxRate, 'tax_amount'=>$taxAmount, 'total_ttc'=>$breakdown['total_ttc'],
+            'tax_rate_id'=>$breakdown['rate_id'], 'tax_regime'=>$breakdown['regime'], 'currency'=>$currency,
             'lines'=>$data['lines'], 'status'=>'pending_validation',
         ]);
         if (! $quote->exists) {
             $quote->created_by_user_id = auth()->id();
-            $quote->reference = 'DEV-' . now()->format('Ymd') . '-' . strtoupper(bin2hex(random_bytes(3)));
+            $quote->reference = app(DocumentNumberService::class)->next($id, 'quote');
         }
         $quote->save();
         return $quote;
@@ -1417,6 +1556,7 @@ class CommercialController extends AdminController
             'clients' => CommercialClient::where('entreprise_id', auth()->user()->entreprise_id)->orderBy('name')->get(),
             'quoteArticles' => $this->quoteArticles(auth()->user()->entreprise_id),
             'quoteServices' => CommercialService::where('entreprise_id', auth()->user()->entreprise_id)->where('is_active', true)->orderBy('name')->get(['name', 'price', 'unit']),
+            'taxRates' => app(TaxService::class)->ratesFor(auth()->user()->entreprise_id),
             'quote' => $quote,
         ]);
     }
@@ -1441,7 +1581,7 @@ class CommercialController extends AdminController
         $this->authorizeWorkflow($quote);
         $copy = $quote->replicate();
         $copy->status = 'pending_validation';
-        $copy->reference = 'DEV-' . now()->format('Ymd') . '-' . strtoupper(bin2hex(random_bytes(3)));
+        $copy->reference = app(DocumentNumberService::class)->next(auth()->user()->entreprise_id, 'quote');
         $copy->created_by_user_id = auth()->id();
         $copy->customer_order_code = null;
         $copy->subject = trim(($quote->subject ?: '') . ' (copie)');
@@ -1486,6 +1626,10 @@ class CommercialController extends AdminController
                 'entreprise_id'=>$quote->entreprise_id, 'created_by_user_id'=>$quote->created_by_user_id, 'quote_id'=>$quote->id, 'client_name'=>$quote->client_name,
                 'customer_order_code'=>$quote->customer_order_code,
                 'lines'=>$quote->lines, 'total_ttc'=>$quote->total_ttc, 'status'=>'pending_delivery',
+                // La ventilation fiscale suit le document, elle n'est plus perdue ici.
+                'total_ht'=>$quote->net_ht, 'tax_amount'=>$quote->tax_amount, 'tax_rate'=>$quote->tax_rate,
+                'tax_regime'=>$quote->tax_regime, 'tax_rate_id'=>$quote->tax_rate_id,
+                'currency'=>$quote->currency ?: app(TaxService::class)->currencyFor($quote->entreprise),
             ]);
             CommercialDelivery::create([
                 'entreprise_id'=>$quote->entreprise_id, 'created_by_user_id'=>$quote->created_by_user_id, 'order_id'=>$order->id, 'client_name'=>$quote->client_name,
@@ -1532,10 +1676,22 @@ class CommercialController extends AdminController
                 'status' => $data['delivery_type'] === 'complete' ? 'delivered' : 'partially_delivered',
             ]);
             if ($data['delivery_type'] === 'complete') {
-                CommercialInvoice::firstOrCreate(
+                $createdInvoice = CommercialInvoice::firstOrCreate(
                     ['entreprise_id'=>$delivery->entreprise_id, 'delivery_id'=>$delivery->id],
-                    ['created_by_user_id'=>$delivery->created_by_user_id, 'client_name'=>$delivery->client_name, 'amount'=>$delivery->order->total_ttc, 'paid_amount'=>0, 'status'=>'unpaid']
+                    [
+                        'created_by_user_id'=>$delivery->created_by_user_id, 'client_name'=>$delivery->client_name,
+                        'amount'=>$delivery->order->total_ttc, 'paid_amount'=>0, 'status'=>'unpaid',
+                        // La facture porte enfin sa propre ventilation, elle est
+                        // le document transmis a l'administration fiscale.
+                        'total_ht'=>$delivery->order->total_ht, 'tax_amount'=>$delivery->order->tax_amount,
+                        'tax_rate'=>$delivery->order->tax_rate, 'tax_regime'=>$delivery->order->tax_regime,
+                        'tax_rate_id'=>$delivery->order->tax_rate_id, 'currency'=>$delivery->order->currency,
+                        'issued_at'=>now(),
+                    ]
                 );
+
+                // La facture alimente desormais le journal comptable.
+                app(AccountingPoster::class)->postSaleInvoice($createdInvoice, auth()->id());
             }
         });
         return back()->with('success', $data['delivery_type'] === 'complete'
@@ -1564,7 +1720,7 @@ class CommercialController extends AdminController
                     'movement_type' => 'entry',
                     'label' => 'Paiement facture #' . $invoice->id,
                     'amount' => $data['paid_amount'],
-                    'currency' => 'XOF',
+                    'currency' => company_currency()['code'],
                     'payment_mode' => 'cash',
                     'reference' => 'FACTURE-' . $invoice->id,
                     'description' => 'Encaissement client',
@@ -1590,6 +1746,17 @@ class CommercialController extends AdminController
                     'transaction_date' => now()->toDateString(),
                 ]);
             }
+            // Chaque reglement est trace avec sa date : c'est la base du
+            // calcul de la TVA sur les encaissements.
+            app(PaymentRecorder::class)->record(
+                $invoice, (float) $data['paid_amount'], $data['payment_method'], now(), auth()->id()
+            );
+
+            // Le reglement solde la creance client au journal comptable.
+            app(AccountingPoster::class)->postCustomerPayment(
+                $invoice, (float) $data['paid_amount'], $data['payment_method'], now(), auth()->id()
+            );
+
             $paid = (float) $invoice->paid_amount + (float) $data['paid_amount'];
             $invoice->update([
                 'paid_amount'=>$paid,
@@ -1602,12 +1769,34 @@ class CommercialController extends AdminController
         return back()->with('success', 'Paiement enregistré.');
     }
 
-    public function cancelInvoice(CommercialInvoice $invoice)
+    /**
+     * Annulation d'une facture de vente.
+     *
+     * Une facture de vente nait de la validation d'une livraison : elle est
+     * emise des sa creation. Passer son statut a "annulee" effacait la trace
+     * du montant facture. On emet donc un avoir total, qui conserve les deux
+     * documents, puis on marque la facture annulee.
+     */
+    public function cancelInvoice(Request $request, CommercialInvoice $invoice)
     {
         $this->authorizeWorkflow($invoice);
-        abort_if($invoice->status === 'paid', 422, 'Une facture payée ne peut pas être annulée.');
+        abort_if($invoice->status === 'cancelled', 422, 'Cette facture est déjà annulée.');
+
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+        ]);
+
+        $integrity = app(InvoiceIntegrityService::class);
+
+        try {
+            $note = $integrity->credit($invoice, $integrity->creditableAmount($invoice), $data['reason'], auth()->id());
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['invoice' => $e->getMessage()]);
+        }
+
         $invoice->update(['status' => 'cancelled']);
-        return back()->with('success', 'Facture annulée.');
+
+        return back()->with('success', "Facture annulée par l'avoir {$note->reference}.");
     }
 
     public function printInvoice(CommercialInvoice $invoice)
@@ -1647,18 +1836,32 @@ class CommercialController extends AdminController
         $client = $quote?->client_id
             ? CommercialClient::where('entreprise_id', $invoice->entreprise_id)->find($quote->client_id)
             : null;
+        $taxService = app(TaxService::class);
+
+        // Un document dont le regime fiscal est inconnu ne part pas au fisc.
+        if (! $taxService->isDeclarable($invoice->tax_regime)) {
+            return back()->withErrors(['fne' => "Le régime fiscal de cette facture n'est pas renseigné. Reprenez le devis d'origine avant de certifier."]);
+        }
+
+        // Le code declare depend du REGIME du taux applique, pas du montant.
+        $fiscalCode = $taxService->fiscalCodeFor($invoice->tax_regime);
+
         $lines = collect($invoice->delivery?->lines ?: [])->map(fn ($line) => [
-            'taxes' => [(float) $invoice->amount > 0 ? 'TVA' : 'TVAE'],
+            'taxes' => [$fiscalCode],
             'reference' => $line['reference'] ?? ('REF-' . ($line['product_id'] ?? 'SERVICE')),
             'description' => $line['description'] ?? $line['name'] ?? 'Article',
             'quantity' => (float) ($line['quantity'] ?? 1),
             'amount' => (float) ($line['unit_price'] ?? $line['price'] ?? 0),
-            'discount' => 0,
+            'discount' => (float) ($line['discount'] ?? 0),
             'measurementUnit' => $line['unit'] ?? 'pcs',
         ])->values()->all();
         if (!$lines) {
             return back()->withErrors(['fne' => 'La facture ne contient aucune ligne certifiable.']);
         }
+
+        // La remise reellement accordee doit etre declaree : sans elle, le
+        // montant transmis ne correspond pas au montant facture.
+        $documentDiscount = (float) ($quote?->total_discount ?? 0);
         try {
             $fne->certify($invoice, 'sale', [
                 'invoiceType' => 'sale', 'paymentMethod' => $this->fnePaymentMethod($invoice->payment_method),
@@ -1667,7 +1870,8 @@ class CommercialController extends AdminController
                 'clientPhone' => $client?->phone ?: '', 'clientEmail' => $client?->email ?: '',
                 'clientNcc' => $client?->tax_id, 'pointOfSale' => config('fne.point_of_sale'),
                 'establishment' => config('fne.establishment'), 'commercialMessage' => 'Merci pour votre confiance',
-                'footer' => 'Service client: ' . (auth()->user()->entreprise->email ?? ''), 'items' => $lines, 'discount' => 0,
+                'footer' => 'Service client: ' . (auth()->user()->entreprise->email ?? ''), 'items' => $lines,
+                'discount' => $documentDiscount,
             ]);
             return back()->with('success', 'Facture certifiée par la FNE.');
         } catch (\Throwable $e) {
@@ -1784,6 +1988,7 @@ class CommercialController extends AdminController
             'module' => collect($this->modules())->firstWhere('key', 'proforma'),
             'modules' => $this->modules(),
             'clients' => CommercialClient::where('entreprise_id', $entrepriseId)->orderBy('name')->get(),
+            'taxRates' => app(TaxService::class)->ratesFor($entrepriseId),
         ]);
     }
 
@@ -1903,6 +2108,7 @@ class CommercialController extends AdminController
             'modules' => $this->modules(),
             'clients' => CommercialClient::where('entreprise_id', auth()->user()->entreprise_id)->orderBy('name')->get(),
             'proforma' => $proforma,
+            'taxRates' => app(TaxService::class)->ratesFor(auth()->user()->entreprise_id),
         ]);
     }
 

@@ -19,6 +19,7 @@ class SupplierInvoice extends Model
         'subtotal',
         'total_ht',
         'tax_amount',
+        'tax_regime',
         'total_amount',
         'currency',
         'status',

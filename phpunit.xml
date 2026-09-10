@@ -21,8 +21,11 @@
         <env name="APP_ENV" value="testing"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="CACHE_DRIVER" value="array"/>
-        <!-- <env name="DB_CONNECTION" value="sqlite"/> -->
-        <!-- <env name="DB_DATABASE" value=":memory:"/> -->
+        <!-- Les tests tournent sur PostgreSQL, dans un schema separe : plusieurs
+             migrations utilisent du SQL propre a Postgres, et SQLite masquerait
+             des erreurs qui se produiraient en production. -->
+        <env name="DB_CONNECTION" value="pgsql"/>
+        <env name="DB_SCHEMA" value="diago_test"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

@@ -17,8 +17,8 @@
 
         <div class="row g-4 mb-6">
             <div class="col-md-3"><div class="p-4 rounded-3 bg-light-primary"><small>Immobilisations</small><h3>{{ $summary['count'] }}</h3></div></div>
-            <div class="col-md-3"><div class="p-4 rounded-3 bg-light-success"><small>Valeur brute</small><h3>{{ number_format($summary['gross'], 0, ',', ' ') }} FCFA</h3></div></div>
-            <div class="col-md-3"><div class="p-4 rounded-3 bg-light-warning"><small>Valeur nette</small><h3>{{ number_format($summary['net'], 0, ',', ' ') }} FCFA</h3></div></div>
+            <div class="col-md-3"><div class="p-4 rounded-3 bg-light-success"><small>Valeur brute</small><h3>{{ money($summary['gross']) }}</h3></div></div>
+            <div class="col-md-3"><div class="p-4 rounded-3 bg-light-warning"><small>Valeur nette</small><h3>{{ money($summary['net']) }}</h3></div></div>
             <div class="col-md-3"><div class="p-4 rounded-3 bg-light-info"><small>Actifs en service</small><h3>{{ $summary['active'] }}</h3></div></div>
         </div>
 
@@ -33,7 +33,7 @@
             <tbody>@forelse($assets as $asset)<tr>
                 <td><strong>{{ $asset->name }}</strong><br><small class="text-muted">{{ $asset->reference ?: 'Sans référence' }} · {{ $asset->location ?: 'Emplacement non défini' }}</small></td>
                 <td>{{ $asset->asset_category }}</td><td>{{ $asset->acquisition_date?->format('d/m/Y') }}</td>
-                <td>{{ number_format((float)$asset->acquisition_value, 0, ',', ' ') }} FCFA</td><td>{{ number_format($asset->depreciation_amount, 0, ',', ' ') }} FCFA</td><td class="fw-bold">{{ number_format($asset->net_value, 0, ',', ' ') }} FCFA</td>
+                <td>{{ money((float)$asset->acquisition_value) }}</td><td>{{ money($asset->depreciation_amount) }}</td><td class="fw-bold">{{ money($asset->net_value) }}</td>
                 <td><span class="badge {{ $asset->status === 'active' ? 'badge-light-success' : 'badge-light-secondary' }}">{{ $asset->status === 'active' ? 'En service' : ($asset->status === 'sold' ? 'Cédée' : 'Mise au rebut') }}</span></td>
                 <td class="text-end"><form method="POST" action="{{ route('admin.comptabilite.fixedAssets.destroy', $asset) }}" onsubmit="return confirm('Supprimer cette immobilisation ?')">@csrf @method('DELETE')<button class="btn btn-sm btn-light-danger">Supprimer</button></form></td>
             </tr>@empty<tr><td colspan="8" class="text-center text-muted py-8">Aucune immobilisation enregistrée.</td></tr>@endforelse</tbody>

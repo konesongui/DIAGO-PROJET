@@ -43,11 +43,23 @@ class TenantContext
             }
             $stockAlerts = collect($stockTotals)->filter(fn ($item) => $item['quantity'] <= 5)->values();
         }
+        // Bilan de l'exercice clos, tant que le dirigeant ne l'a pas telecharge.
+        $pendingReport = null;
+        if ($user?->entreprise_id && $user->hasRole('admin')) {
+            try {
+                $pendingReport = app(\App\Services\AnnualReportService::class)->pendingReport($user->entreprise_id);
+            } catch (\Throwable $e) {
+                // Un bilan indisponible ne doit jamais empecher l'acces a l'application.
+                report($e);
+            }
+        }
+
         view()->share([
             'pendingPermissions' => $pendingPermissions,
             'pendingLeaves' => $pendingLeaves,
             'stockAlerts' => $stockAlerts,
-            'notificationCount' => $pendingPermissions + $pendingLeaves + $stockAlerts->count(),
+            'pendingAnnualReport' => $pendingReport,
+            'notificationCount' => $pendingPermissions + $pendingLeaves + $stockAlerts->count() + ($pendingReport ? 1 : 0),
         ]);
 
         $tenantId = $request->session()->get('tenant_id')

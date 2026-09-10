@@ -66,7 +66,7 @@
         const allowances = ['sursalary','seniority_bonus','transport_allowance','responsibility_bonus','bonus','performance_bonus','risk_bonus','attendance_bonus','gratification','leave_pay','indemnities'].reduce((sum, key) => sum + n(key), 0);
         const gross = n('monthly_salary') + allowances, fiscal = n('monthly_salary') + n('sursalary') + Math.max(n('transport_allowance') - 30000, 0);
         const deductions = n('income_tax') + n('cmu') + n('other_deductions') + Math.min(Math.max(gross - n('transport_allowance'), 0), 3375000) * .063;
-        document.getElementById('previewGross').textContent = money(gross); document.getElementById('previewFiscal').textContent = money(fiscal); document.getElementById('previewDeductions').textContent = money(deductions); document.getElementById('previewNet').textContent = money(Math.max(gross - deductions, 0));
+        document.getElementById('previewGross').textContent = money(gross); document.getElementById('previewFiscal').textContent = money(fiscal); document.getElementById('previewDeductions').textContent = money(deductions); document.getElementById('previewNet').textContent = money(Math.max(gross - deductions));
     };
     const syncPaymentAccount = () => {
         const cash = paymentMode.value === 'cash';

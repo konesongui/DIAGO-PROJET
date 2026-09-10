@@ -2,7 +2,7 @@
 
 @section('content')
 @php
-    $money = fn ($value) => number_format((float) $value, 0, ',', ' ') . ' FCFA';
+    $money = fn ($value) => money((float) $value);
     $cards = [
         ['Liquidité totale', $liquidity, 'cash_accounts', 'primary'],
         ['Entrées caisse et banque', $cashIn + $bankIn, 'cash_movements', 'success'],

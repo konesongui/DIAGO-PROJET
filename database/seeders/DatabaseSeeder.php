@@ -27,6 +27,7 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
+        $this->call(TaxRateSeeder::class);
         $this->call(AccountingSeeder::class);
         $this->call(HrCommercialSeeder::class);
 

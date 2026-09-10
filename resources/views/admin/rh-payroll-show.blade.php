@@ -97,7 +97,7 @@
         <tr><td>FDFP, Taxe Apprentissage</td><td class="right">{{ $money($payroll->fiscal_gross) }}</td><td></td><td></td><td>0,40</td><td class="right">{{ $money($payroll->fdfp_apprenticeship) }}</td></tr>
         <tr><td>FDFP, Form. Prof. Continue</td><td class="right">{{ $money($payroll->fiscal_gross) }}</td><td></td><td></td><td>1,20</td><td class="right">{{ $money($payroll->fdfp_training) }}</td></tr>
         <tr class="total"><td>Total des retenues</td><td></td><td></td><td class="right">{{ $money($payroll->total_employee_deductions) }}</td><td></td><td class="right">{{ $money($payroll->total_employer_deductions) }}</td></tr>
-        <tr class="net"><td>NET À PAYER</td><td colspan="5">{{ $money($payroll->net_salary) }} FCFA</td></tr>
+        <tr class="net"><td>NET À PAYER</td><td colspan="5">{{ $money($payroll->net_salary) }} {{ currency_symbol() }}</td></tr>
         </tbody>
     </table>
     <table class="signatures"><tr><td class="signature">Signature employé</td><td class="signature">Signature employeur</td></tr></table>

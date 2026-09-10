@@ -1231,6 +1231,13 @@
                                             <span class="d-block small text-muted ms-4">{{ $stockAlert['quantity'] <= 0 ? 'Rupture de stock' : 'Stock faible' }} · {{ number_format(max(0, $stockAlert['quantity']), 2, ',', ' ') }} {{ $stockAlert['unit'] }}</span>
                                         </a>
                                     @endforeach
+                                    @if($pendingAnnualReport ?? null)
+                                        <a href="{{ route('admin.bilans.show', $pendingAnnualReport) }}" class="notification-item">
+                                            <span class="me-2">📊</span>
+                                            <strong>{{ $pendingAnnualReport->label() }}</strong>
+                                            <span class="d-block small text-muted ms-4">Exercice clos, bilan non téléchargé</span>
+                                        </a>
+                                    @endif
                                     @if(($notificationCount ?? 0) === 0)
                                         <div class="text-muted small px-2 py-3">{{ __('No new requests.') }}</div>
                                     @endif
@@ -1565,5 +1572,106 @@
             }
         })();
     </script>
+
+<script>
+    // Devise de l'entreprise, pour les montants calcules cote navigateur.
+    window.APP_CURRENCY = {
+        code: @json(currency_symbol() ? company_currency()['code'] : 'XOF'),
+        symbol: @json(currency_symbol()),
+        decimals: {{ currency_decimals() }}
+    };
+    window.formatMoney = function (value, decimals) {
+        var d = typeof decimals === 'number' ? decimals : window.APP_CURRENCY.decimals;
+        return new Intl.NumberFormat('fr-FR', {
+            minimumFractionDigits: d, maximumFractionDigits: d
+        }).format(Number(value) || 0) + ' ' + window.APP_CURRENCY.symbol;
+    };
+</script>
+
+@if($pendingAnnualReport ?? null)
+@php($ar = $pendingAnnualReport)
+@php($arData = $ar->data)
+@php($arMoney = fn ($v) => number_format((float) $v, $arData['decimals'] ?? 0, ',', ' ') . ' ' . ($arData['currency_symbol'] ?? ''))
+<div class="modal fade" id="annualReportModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title">📊 {{ $ar->label() }}</h5>
+                    <div class="text-muted small">Exercice du {{ \Carbon\Carbon::parse($arData['from'])->format('d/m/Y') }}
+                        au {{ \Carbon\Carbon::parse($arData['to'])->format('d/m/Y') }}</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" id="annualReportClose"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-4 mb-4">
+                    <div class="col-md-4"><div class="p-3 rounded-3" style="background:#f1f5f9">
+                        <div class="text-muted small text-uppercase fw-bold">Total actif</div>
+                        <div class="fs-4 fw-bold">{{ $arMoney($arData['totals']['assets']) }}</div>
+                    </div></div>
+                    <div class="col-md-4"><div class="p-3 rounded-3" style="background:#f1f5f9">
+                        <div class="text-muted small text-uppercase fw-bold">Passif et capitaux</div>
+                        <div class="fs-4 fw-bold">{{ $arMoney($arData['totals']['liabilities_and_equity']) }}</div>
+                    </div></div>
+                    <div class="col-md-4"><div class="p-3 rounded-3"
+                        style="background:{{ $arData['totals']['net_result'] >= 0 ? '#dcfce7' : '#fee2e2' }}">
+                        <div class="text-muted small text-uppercase fw-bold">Résultat de l'exercice</div>
+                        <div class="fs-4 fw-bold">{{ $arMoney($arData['totals']['net_result']) }}</div>
+                    </div></div>
+                </div>
+
+                <h6 class="fw-bold mt-4">Compte de résultat</h6>
+                <table class="table table-sm align-middle">
+                    <tbody>
+                        <tr><td>Produits</td><td class="text-end">{{ $arMoney($arData['totals']['revenue']) }}</td></tr>
+                        <tr><td>Charges</td><td class="text-end">{{ $arMoney($arData['totals']['expenses']) }}</td></tr>
+                        <tr class="fw-bold border-top"><td>Résultat</td>
+                            <td class="text-end">{{ $arMoney($arData['totals']['net_result']) }}</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="alert alert-warning mt-4 mb-0 small">
+                    Si vous fermez cette fenêtre sans télécharger le PDF, le bilan restera
+                    signalé comme non lu dans vos notifications.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a href="{{ route('admin.bilans.show', $ar) }}" class="btn btn-light">Voir le détail</a>
+                <a href="{{ route('admin.bilans.download', $ar) }}" class="btn btn-primary" id="annualReportDownload">
+                    Télécharger le PDF
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    (function () {
+        var el = document.getElementById('annualReportModal');
+        if (!el || typeof bootstrap === 'undefined') { return; }
+
+        // La fenetre ne s'ouvre qu'une fois par session : le rappel se fait
+        // ensuite par la notification, pour ne pas harceler l'utilisateur.
+        var key = 'annualReportShown{{ $ar->id }}';
+        try {
+            if (!sessionStorage.getItem(key)) {
+                new bootstrap.Modal(el).show();
+                sessionStorage.setItem(key, '1');
+            }
+        } catch (e) {
+            new bootstrap.Modal(el).show();
+        }
+
+        el.addEventListener('hidden.bs.modal', function () {
+            fetch('{{ route('admin.bilans.acknowledge', $ar) }}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                }
+            }).catch(function () {});
+        });
+    })();
+</script>
+@endif
 </body>
 </html>

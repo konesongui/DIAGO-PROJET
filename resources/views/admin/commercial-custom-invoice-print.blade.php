@@ -54,7 +54,7 @@
     <div class="totals">
         <div><span>Total HT</span><span>{{ number_format($invoice->total_ht, 0, ',', ' ') }} CFA</span></div>
         <div><span>Remise</span><span>{{ number_format($invoice->total_discount, 0, ',', ' ') }} CFA</span></div>
-        <div><span>TVA</span><span>{{ number_format($invoice->vat_amount, 0, ',', ' ') }} CFA</span></div>
+        <div><span>TVA</span><span>{{ number_format($invoice->tax_amount, 0, ',', ' ') }} CFA</span></div>
         <div class="total-row"><span>Total TTC</span><span>{{ number_format($invoice->total_ttc, 0, ',', ' ') }} CFA</span></div>
     </div>
 </body>

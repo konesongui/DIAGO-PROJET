@@ -170,7 +170,7 @@
             const updateRenewalAmount = () => {
                 const duration = Number(renewalDurationSelect.value || 1);
                 const amount = renewalAmounts[duration] || renewalAmounts[1];
-                renewalAmountPreview.textContent = new Intl.NumberFormat('fr-FR').format(amount) + ' FCFA';
+                renewalAmountPreview.textContent = window.formatMoney(amount);
             };
 
             renewalDurationSelect.addEventListener('change', updateRenewalAmount);

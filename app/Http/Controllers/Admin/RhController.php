@@ -663,7 +663,7 @@ class RhController extends AdminController
                     CashMovement::create([
                         'entreprise_id' => $entrepriseId, 'cash_account_id' => $cashAccount->id,
                         'movement_type' => 'exit', 'label' => 'Paiement salaire - ' . $employee->full_name,
-                        'amount' => $net, 'currency' => 'XOF', 'payment_mode' => 'cash',
+                        'amount' => $net, 'currency' => company_currency()['code'], 'payment_mode' => 'cash',
                         'reference' => $reference, 'description' => 'Bulletin ' . $data['month'] . '/' . $data['year'],
                         'movement_date' => now()->toDateString(),
                     ]);

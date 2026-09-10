@@ -8,7 +8,7 @@
     }
 </style>
 @php
-    $money = fn ($value) => number_format((float) $value, 0, ',', ' ') . ' FCFA';
+    $money = fn ($value) => money((float) $value);
     $cards = [
         ['Chiffre d’affaires réalisé', $invoiced + $detailLists['sales']->sum('total'), 'invoices', 'primary'],
         ['Croissance mensuelle', $monthlyGrowth, 'invoices', 'success'],

@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Models\Entreprise;
+use App\Models\TaxRate;
 use App\Services\CinetPayService;
+use App\Services\TaxService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\Rule;
 
 class SettingController extends AdminController
 {
@@ -149,10 +152,110 @@ class SettingController extends AdminController
             ]);
         }
 
+        if ($module === 'fiscalite') {
+            $entreprise = auth()->user()->entreprise;
+            $taxService = app(TaxService::class);
+
+            return $this->page('settings-fiscalite', [
+                'title' => $modules[$module]['title'],
+                'module' => $modules[$module],
+                'rates' => TaxRate::ordered()->get(),
+                'taxBasis' => data_get($entreprise?->settings ?? [], 'tax_basis', 'debits'),
+                'regimes' => TaxRate::regimes(),
+                'currency' => $taxService->currencyFor($entreprise),
+                'currencySymbol' => $taxService->currencySymbolFor($entreprise),
+                'decimals' => $taxService->decimalsFor($taxService->currencyFor($entreprise)),
+            ]);
+        }
+
         return $this->page('settings-module', [
             'title' => $modules[$module]['title'],
             'module' => $modules[$module],
         ]);
+    }
+
+    /** Fait generateur de la taxe : a la facturation ou a l'encaissement. */
+    public function updateTaxBasis(Request $request)
+    {
+        $validated = $request->validate([
+            'tax_basis' => ['required', Rule::in(['debits', 'collections'])],
+        ]);
+
+        $entreprise = Entreprise::whereKey(auth()->user()->entreprise_id)->firstOrFail();
+        $settings = $entreprise->settings ?? [];
+        $settings['tax_basis'] = $validated['tax_basis'];
+        $entreprise->update(['settings' => $settings]);
+
+        return redirect()->route('admin.settings.module', ['module' => 'fiscalite'])
+            ->with('success', 'Le fait générateur de la taxe a été enregistré.');
+    }
+
+    public function storeTaxRate(Request $request)
+    {
+        $validated = $this->validateTaxRate($request);
+        $validated['entreprise_id'] = auth()->user()->entreprise_id;
+
+        $rate = TaxRate::create($validated);
+        $this->enforceSingleDefaultRate($rate);
+
+        return redirect()->route('admin.settings.module', ['module' => 'fiscalite'])
+            ->with('success', 'Le taux de taxe a été ajouté.');
+    }
+
+    public function updateTaxRate(Request $request, TaxRate $taxRate)
+    {
+        abort_unless($taxRate->entreprise_id === auth()->user()->entreprise_id, 403);
+
+        $taxRate->update($this->validateTaxRate($request, $taxRate));
+        $this->enforceSingleDefaultRate($taxRate);
+
+        return redirect()->route('admin.settings.module', ['module' => 'fiscalite'])
+            ->with('success', 'Le taux de taxe a été mis à jour.');
+    }
+
+    public function destroyTaxRate(TaxRate $taxRate)
+    {
+        abort_unless($taxRate->entreprise_id === auth()->user()->entreprise_id, 403);
+
+        // Un taux deja utilise ne doit pas disparaitre : les documents emis
+        // doivent rester lisibles. On le desactive au lieu de le supprimer.
+        $taxRate->update(['is_active' => false, 'is_default' => false]);
+
+        return redirect()->route('admin.settings.module', ['module' => 'fiscalite'])
+            ->with('success', 'Le taux a été désactivé. Les documents déjà émis le conservent.');
+    }
+
+    private function validateTaxRate(Request $request, ?TaxRate $current = null): array
+    {
+        $unique = Rule::unique('tax_rates', 'name')
+            ->where(fn ($query) => $query->where('entreprise_id', auth()->user()->entreprise_id));
+
+        if ($current) {
+            $unique = $unique->ignore($current->id);
+        }
+
+        return $request->validate([
+            'name' => ['required', 'string', 'max:120', $unique],
+            'code' => ['nullable', 'string', 'max:30'],
+            'rate' => ['required', 'numeric', 'min:0', 'max:100'],
+            'regime' => ['required', Rule::in(array_keys(TaxRate::regimes()))],
+            'effective_from' => ['nullable', 'date'],
+            'is_default' => ['nullable', 'boolean'],
+            'is_active' => ['nullable', 'boolean'],
+            'position' => ['nullable', 'integer', 'min:0', 'max:999'],
+        ]);
+    }
+
+    /** Un seul taux par defaut a la fois dans une entreprise. */
+    private function enforceSingleDefaultRate(TaxRate $rate): void
+    {
+        if (! $rate->is_default) {
+            return;
+        }
+
+        TaxRate::where('entreprise_id', $rate->entreprise_id)
+            ->where('id', '!=', $rate->id)
+            ->update(['is_default' => false]);
     }
 
     public function updateEmail(Request $request)
@@ -518,6 +621,16 @@ class SettingController extends AdminController
                 'icon' => '⚙️',
                 'route' => 'admin.settings.module',
                 'route_parameters' => ['module' => 'general'],
+                'route_label' => 'Ouvrir',
+            ],
+            [
+                'key' => 'fiscalite',
+                'category' => 'Paramètre fiscal',
+                'title' => 'Taxes et TVA',
+                'description' => 'Définissez les taux de taxe appliqués à vos devis, factures et ventes.',
+                'icon' => '🧾',
+                'route' => 'admin.settings.module',
+                'route_parameters' => ['module' => 'fiscalite'],
                 'route_label' => 'Ouvrir',
             ],
             [

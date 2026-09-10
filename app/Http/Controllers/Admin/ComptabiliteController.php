@@ -17,6 +17,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Services\FneCertificationService;
+use App\Services\AccountingPoster;
+use App\Services\LedgerService;
+use App\Services\TaxService;
+use App\Services\VatDeclarationService;
 
 class ComptabiliteController extends AdminController
 {
@@ -77,9 +81,20 @@ class ComptabiliteController extends AdminController
 
     public function index()
     {
-        $entries = AccountEntry::latest('posted_at')->limit(6)->get();
-        $credits = AccountEntry::where('type', 'credit')->sum('amount');
-        $debits = AccountEntry::where('type', 'debit')->sum('amount');
+        // Les totaux viennent desormais du journal en partie double, et non
+        // plus d'une table qui n'etait alimentee que par le jeu de demonstration.
+        $entrepriseId = auth()->user()?->entreprise_id;
+        $entries = \App\Models\JournalEntry::withoutGlobalScope('entreprise')
+            ->where('entreprise_id', $entrepriseId)
+            ->with('lines.account')->latest('entry_date')->limit(6)->get();
+
+        $totals = \DB::table('journal_entry_lines as l')
+            ->join('journal_entries as e', 'e.id', '=', 'l.journal_entry_id')
+            ->where('e.entreprise_id', $entrepriseId)
+            ->selectRaw('COALESCE(SUM(l.debit),0) AS d, COALESCE(SUM(l.credit),0) AS c')->first();
+
+        $debits = (float) $totals->d;
+        $credits = (float) $totals->c;
 
         return $this->page('comptabilite', [
             'title' => 'Espace Comptabilite',
@@ -271,7 +286,7 @@ class ComptabiliteController extends AdminController
             'name' => $validated['name'],
             'account_type' => $validated['account_type'],
             'description' => $validated['description'] ?? null,
-            'currency' => 'XOF',
+            'currency' => company_currency()['code'],
             'initial_balance' => $validated['initial_balance'] ?? 0,
             'balance' => $validated['initial_balance'] ?? 0,
             'is_active' => true,
@@ -357,7 +372,7 @@ class ComptabiliteController extends AdminController
             'movement_type' => $validated['movement_type'],
             'label' => $validated['label'],
             'amount' => $validated['amount'],
-            'currency' => 'XOF',
+            'currency' => company_currency()['code'],
             'payment_mode' => $validated['payment_mode'],
             'reference' => $validated['reference'] ?? null,
             'description' => $validated['description'] ?? null,
@@ -821,6 +836,90 @@ class ComptabiliteController extends AdminController
         return redirect()->route('admin.comptabilite.banques')->with('success', 'Mouvement bancaire enregistré.');
     }
 
+    /**
+     * Etat de TVA de la periode : taxe collectee, taxe deductible et solde.
+     */
+    public function declarationTva(Request $request)
+    {
+        $entrepriseId = auth()->user()?->entreprise_id;
+        abort_unless($entrepriseId, 403);
+
+        $from = Carbon::parse($request->input('date_debut', now()->startOfMonth()->toDateString()));
+        $to = Carbon::parse($request->input('date_fin', now()->endOfMonth()->toDateString()));
+        abort_unless($from->lte($to), 422, 'La période sélectionnée est invalide.');
+
+        $taxService = app(TaxService::class);
+        $entreprise = auth()->user()->entreprise;
+
+        // Le fait generateur vient du reglage de l'entreprise, et peut etre
+        // change ponctuellement depuis l'ecran.
+        $basis = $request->input('basis')
+            ?: data_get($entreprise?->settings ?? [], 'tax_basis', VatDeclarationService::BASIS_DEBITS);
+
+        return $this->page('comptabilite-declaration-tva', [
+            'title' => 'Déclaration de TVA',
+            'subtitle' => 'Taxe collectée, taxe déductible et solde de la période',
+            'declaration' => app(VatDeclarationService::class)->declare($entrepriseId, $from, $to, $basis),
+            'basis' => $basis,
+            'dateDebut' => $from->toDateString(),
+            'dateFin' => $to->toDateString(),
+            'currencySymbol' => $taxService->currencySymbolFor($entreprise),
+            'decimals' => $taxService->decimalsFor($taxService->currencyFor($entreprise)),
+        ]);
+    }
+
+    /**
+     * Journal comptable : les pieces de la periode et la balance des comptes.
+     */
+    public function journalComptable(Request $request)
+    {
+        $entrepriseId = auth()->user()?->entreprise_id;
+        abort_unless($entrepriseId, 403);
+
+        $from = Carbon::parse($request->input('date_debut', now()->startOfMonth()->toDateString()));
+        $to = Carbon::parse($request->input('date_fin', now()->endOfMonth()->toDateString()));
+        abort_unless($from->lte($to), 422, 'La période sélectionnée est invalide.');
+
+        $ledger = app(LedgerService::class);
+        $ledger->ensureChartOfAccounts($entrepriseId);
+
+        $entries = \App\Models\JournalEntry::withoutGlobalScope('entreprise')
+            ->where('entreprise_id', $entrepriseId)
+            ->whereBetween('entry_date', [$from->toDateString(), $to->toDateString()])
+            ->when($request->filled('journal'), fn ($q) => $q->where('journal', $request->input('journal')))
+            ->with('lines.account')
+            ->orderBy('entry_date')->orderBy('id')
+            ->get();
+
+        // Balance : un compte par ligne, avec ses totaux et son solde.
+        $balance = \DB::table('journal_entry_lines as l')
+            ->join('journal_entries as e', 'e.id', '=', 'l.journal_entry_id')
+            ->join('ledger_accounts as a', 'a.id', '=', 'l.ledger_account_id')
+            ->where('e.entreprise_id', $entrepriseId)
+            ->whereBetween('e.entry_date', [$from->toDateString(), $to->toDateString()])
+            ->groupBy('a.code', 'a.name', 'a.type')
+            ->selectRaw('a.code, a.name, a.type, SUM(l.debit) AS debit, SUM(l.credit) AS credit')
+            ->orderBy('a.code')
+            ->get();
+
+        $taxService = app(TaxService::class);
+
+        return $this->page('comptabilite-journal', [
+            'title' => 'Journal comptable',
+            'subtitle' => 'Pièces en partie double et balance des comptes',
+            'entries' => $entries,
+            'balance' => $balance,
+            'totalDebit' => round((float) $balance->sum('debit'), 2),
+            'totalCredit' => round((float) $balance->sum('credit'), 2),
+            'dateDebut' => $from->toDateString(),
+            'dateFin' => $to->toDateString(),
+            'journalFilter' => $request->input('journal'),
+            'journaux' => ['VE' => 'Ventes', 'AC' => 'Achats', 'CA' => 'Caisse', 'BQ' => 'Banque', 'OD' => 'Opérations diverses'],
+            'currencySymbol' => $taxService->currencySymbolFor(auth()->user()->entreprise),
+            'decimals' => $taxService->decimalsFor($taxService->currencyFor(auth()->user()->entreprise)),
+        ]);
+    }
+
     public function rapports()
     {
         $entrepriseId = auth()->user()?->entreprise_id;
@@ -1155,7 +1254,7 @@ class ComptabiliteController extends AdminController
                     'movement_type' => 'exit',
                     'label' => 'Transfert vers ' . $destinationName,
                     'amount' => $amount,
-                    'currency' => 'XOF',
+                    'currency' => company_currency()['code'],
                     'payment_mode' => 'transfer',
                     'is_transfer' => true,
                     'description' => $validated['description'] ?? 'Transfert inter-comptes',
@@ -1189,7 +1288,7 @@ class ComptabiliteController extends AdminController
                     'movement_type' => 'entry',
                     'label' => 'Transfert depuis ' . $sourceName,
                     'amount' => $amount,
-                    'currency' => 'XOF',
+                    'currency' => company_currency()['code'],
                     'payment_mode' => 'transfer',
                     'is_transfer' => true,
                     'description' => $validated['description'] ?? 'Transfert inter-comptes',
@@ -1476,20 +1575,55 @@ class ComptabiliteController extends AdminController
                 return $this->page('supplier-invoice-show', [
                     'title' => 'Détail de la facture',
                     'invoice' => $supplierInvoice,
+                    'regimes' => \App\Models\TaxRate::regimes(),
                 ]);
+            }
+
+            /**
+             * Le regime lu dans un PDF n'est qu'une supposition. Cette action
+             * permet a un humain de le confirmer avant toute declaration.
+             */
+            public function updateSupplierInvoiceRegime(Request $request, SupplierInvoice $supplierInvoice)
+            {
+                $this->authorizeSupplierInvoice($supplierInvoice);
+
+                abort_if($supplierInvoice->fne_status === 'certified', 422, 'Cette facture est déjà certifiée, son régime ne peut plus changer.');
+
+                $validated = $request->validate([
+                    'tax_regime' => ['required', \Illuminate\Validation\Rule::in(array_keys(\App\Models\TaxRate::regimes()))],
+                ]);
+
+                $supplierInvoice->update(['tax_regime' => $validated['tax_regime']]);
+
+                // L'ecriture comptable est passee une fois qu'un humain a
+                // valide la facture : les donnees lues dans un PDF ne suffisent
+                // pas a engager la comptabilite.
+                app(AccountingPoster::class)->postSupplierInvoice($supplierInvoice->refresh(), auth()->id());
+
+                return back()->with('success', 'Le régime fiscal de la facture a été confirmé et l’écriture comptable enregistrée.');
             }
 
             public function certifySupplierInvoice(SupplierInvoice $supplierInvoice, FneCertificationService $fne)
             {
                 $this->authorizeSupplierInvoice($supplierInvoice);
                 $data = $supplierInvoice->extracted_data ?: [];
+                $taxService = app(TaxService::class);
+
+                // Sans regime confirme, on ne declare pas : un zero extrait d'un
+                // PDF ne prouve pas une exoneration.
+                if (! $taxService->isDeclarable($supplierInvoice->tax_regime)) {
+                    return back()->withErrors(['fne' => "Le régime fiscal de cette facture n'est pas confirmé. Renseignez-le sur la fiche avant de certifier."]);
+                }
+
+                $fiscalCode = $taxService->fiscalCodeFor($supplierInvoice->tax_regime);
+
                 $items = collect($data['items'] ?? [])->map(fn ($item) => [
-                    'taxes' => [$supplierInvoice->tax_amount > 0 ? 'TVA' : 'TVAE'],
+                    'taxes' => [$fiscalCode],
                     'reference' => $item['reference'] ?? 'ACHAT',
                     'description' => $item['description'] ?? $item['name'] ?? 'Article fournisseur',
                     'quantity' => (float) ($item['quantity'] ?? 1),
                     'amount' => (float) ($item['amount'] ?? $item['unit_price'] ?? 0),
-                    'discount' => 0, 'measurementUnit' => $item['unit'] ?? 'pcs',
+                    'discount' => (float) ($item['discount'] ?? 0), 'measurementUnit' => $item['unit'] ?? 'pcs',
                 ])->filter(fn ($item) => $item['amount'] > 0)->values()->all();
                 if (!$items) {
                     return back()->withErrors(['fne' => 'Les lignes de cette facture PDF sont incomplètes. Vérifiez les données extraites avant certification.']);
@@ -1738,7 +1872,9 @@ class ComptabiliteController extends AdminController
                 if (preg_match('/\bUSD\b/iu', $text)) {
                     return 'USD';
                 }
-                return 'XOF';
+
+                // A defaut de mention lisible, on retient la devise de l'entreprise.
+                return company_currency()['code'];
             }
 
             protected function normalizeInvoiceDate(?string $value): ?string
@@ -1782,7 +1918,7 @@ class ComptabiliteController extends AdminController
     protected function buildComptabiliteHub(): array
     {
         return [
-            'summary' => ['total' => 10, 'available' => 9, 'planned' => 1, 'ohada' => 0],
+            'summary' => ['total' => 13, 'available' => 12, 'planned' => 1, 'ohada' => 0],
             'sections' => [[
                 'key' => 'finance',
                 'title' => 'Finance',
@@ -1794,6 +1930,9 @@ class ComptabiliteController extends AdminController
                     $this->makeModule('Banques', 'Gestion des comptes bancaires', route('admin.comptabilite.banques'), 'Banque', 'fa-university', 'green', 'socle banque comptes bancaires', true, true),
                     $this->makeModule('État trésorerie', 'Situation globale de trésorerie', route('admin.comptabilite.rapports'), 'Analyse', 'fa-pie-chart', 'purple', 'socle analyse tresorerie etat', true, true),
                     $this->makeModule('Rapport financier', 'Analyses et synthèses financières', route('admin.comptabilite.rapport_financier'), 'Rapport', 'fa-file-text', 'orange', 'socle rapport financier synthese', true, true),
+                    $this->makeModule('Bilans financiers', 'Bilan et compte de résultat des exercices clos', route('admin.bilans.index'), 'Bilan', 'fa-balance-scale', 'green', 'bilan financier exercice annuel resultat cloture', true, true),
+                    $this->makeModule('Journal comptable', 'Écritures en partie double et balance des comptes', route('admin.comptabilite.journal'), 'Comptable', 'fa-book', 'indigo', 'journal ecritures partie double balance grand livre comptes', true, true),
+                    $this->makeModule('Déclaration de TVA', 'Taxe collectée, taxe déductible et solde de la période', route('admin.comptabilite.declaration_tva'), 'Fiscal', 'fa-percent', 'orange', 'tva taxe declaration fiscal collectee deductible solde', true, true),
                     $this->makeModule('Transfert de montant', 'Mouvements entre comptes', route('admin.comptabilite.transfers'), 'Transfert', 'fa-exchange', 'teal', 'socle transfert mouvements comptes', true, true),
                     $this->makeModule('Catégorie dépenses', 'Gestion des catégories de dépenses', route('admin.comptabilite.expenseCategories'), 'Catégorie', 'fa-tags', 'red', 'socle depenses categories', true, true),
                     $this->makeModule('Immobilisations', 'Gestion des actifs immobilisés', route('admin.comptabilite.fixedAssets'), 'Actif', 'fa-building', 'purple', 'socle immobilisations actifs', true, true),

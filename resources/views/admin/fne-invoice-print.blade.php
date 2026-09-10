@@ -42,7 +42,7 @@
             <tr><td>{{ $line['item_reference'] ?? '-' }}</td><td>{{ $line['item_name'] ?? '-' }}</td><td class="right">{{ number_format((float)($line['unit_price'] ?? 0),0,',',' ') }}</td><td>{{ $line['quantity'] ?? 0 }}</td><td>{{ $line['unit'] ?? 'pcs' }}</td><td class="right">{{ number_format((float)($line['quantity'] ?? 0)*(float)($line['unit_price'] ?? 0),0,',',' ') }}</td></tr>
         @endforeach
         </tbody></table>
-        <table class="totals"><tr><td>Total TTC</td><td class="right">{{ number_format((float)$invoice->amount,0,',',' ') }} FCFA</td></tr></table>
+        <table class="totals"><tr><td>Total TTC</td><td class="right">{{ money((float)$invoice->amount) }}</td></tr></table>
     @else
         <table class="items"><thead><tr><th>Description</th><th>Référence</th><th>Qté</th><th>Prix unitaire</th><th>Total</th></tr></thead><tbody>
         @foreach(($invoice->extracted_data['items'] ?? []) as $item)

@@ -140,25 +140,27 @@
                 <h3 class="h5 fw-bold text-dark mb-0">Services supplémentaires</h3>
             </div>
             <div class="row g-2">
+                @forelse($globalServiceCatalog ?? [] as $code => $service)
                 <div class="col-md-6">
-                    <label class="service-option"><input type="checkbox" name="global_services[]" value="mise_en_page" class="global-service" data-price="50000" {{ in_array('mise_en_page', $invoiceServices, true) ? 'checked' : '' }}> <span>Mise en page professionnelle - <strong>50 000 FCFA</strong></span></label>
+                    <label class="service-option">
+                        <input type="checkbox" name="global_services[]" value="{{ $code }}" class="global-service"
+                               data-price="{{ (float) $service['price'] }}"
+                               {{ in_array($code, $invoiceServices, true) ? 'checked' : '' }}>
+                        <span>{{ $service['label'] }} - <strong>{{ money($service['price']) }}</strong></span>
+                    </label>
                 </div>
-                <div class="col-md-6">
-                    <label class="service-option"><input type="checkbox" name="global_services[]" value="conception_couverture" class="global-service" data-price="30000" {{ in_array('conception_couverture', $invoiceServices, true) ? 'checked' : '' }}> <span>Conception de couverture - <strong>30 000 FCFA</strong></span></label>
+                @empty
+                <div class="col-12">
+                    <div class="text-muted fs-7 py-3">
+                        Aucune prestation forfaitaire n'est configurée. Ajoutez-les depuis le module
+                        Services en cochant « proposée sur les factures ».
+                    </div>
                 </div>
-                <div class="col-md-6">
-                    <label class="service-option"><input type="checkbox" name="global_services[]" value="correction_orthographe" class="global-service" data-price="20000" {{ in_array('correction_orthographe', $invoiceServices, true) ? 'checked' : '' }}> <span>Correction (orthographe et grammaire) - <strong>20 000 FCFA</strong></span></label>
-                </div>
-                <div class="col-md-6">
-                    <label class="service-option"><input type="checkbox" name="global_services[]" value="isbn" class="global-service" data-price="15000" {{ in_array('isbn', $invoiceServices, true) ? 'checked' : '' }}> <span>Numéro ISBN - <strong>15 000 FCFA</strong></span></label>
-                </div>
-                <div class="col-md-6">
-                    <label class="service-option"><input type="checkbox" name="global_services[]" value="depot_legal" class="global-service" data-price="25000" {{ in_array('depot_legal', $invoiceServices, true) ? 'checked' : '' }}> <span>Dépôt légal aux Archives nationales - <strong>25 000 FCFA</strong></span></label>
-                </div>
+                @endforelse
             </div>
             <div class="totals-box mt-4" id="servicesTotalBox" style="display:none;">
                 <div class="text-uppercase text-muted fs-8 fw-bold mb-2">Services additionnels</div>
-                <div class="summary-total" id="servicesTotalValue">0 FCFA</div>
+                <div class="summary-total" id="servicesTotalValue">0 {{ currency_symbol() }}</div>
             </div>
         </div>
 
@@ -276,7 +278,7 @@
                         </div>
                         <div class="col-md-2 text-end">
                             <label class="field-label">Montant net</label>
-                            <div class="fw-bold fs-5 total-line">0 FCFA</div>
+                            <div class="fw-bold fs-5 total-line">0 {{ currency_symbol() }}</div>
                             <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-item-btn">Supprimer</button>
                         </div>
                     </div>
@@ -292,19 +294,19 @@
             <div class="row g-3 align-items-end">
                 <div class="col-md-2">
                     <div class="text-uppercase text-muted fs-8 fw-bold">Total HT</div>
-                    <div class="summary-total" id="subtotalValue">0 FCFA</div>
+                    <div class="summary-total" id="subtotalValue">0 {{ currency_symbol() }}</div>
                 </div>
                 <div class="col-md-2">
                     <div class="text-uppercase text-muted fs-8 fw-bold">Remise</div>
-                    <div class="summary-total fs-3" id="discountValue">0 FCFA</div>
+                    <div class="summary-total fs-3" id="discountValue">0 {{ currency_symbol() }}</div>
                 </div>
                 <div class="col-md-2">
                     <div class="text-uppercase text-muted fs-8 fw-bold">TVA</div>
-                    <div class="summary-total fs-3" id="vatValue">0 FCFA</div>
+                    <div class="summary-total fs-3" id="vatValue">0 {{ currency_symbol() }}</div>
                 </div>
                 <div class="col-md-3">
                     <div class="text-uppercase text-muted fs-8 fw-bold">Total TTC</div>
-                    <div class="summary-total" id="grandTotalValue">0 FCFA</div>
+                    <div class="summary-total" id="grandTotalValue">0 {{ currency_symbol() }}</div>
                 </div>
             </div>
             <div class="row g-3 mt-2 align-items-end">
@@ -328,7 +330,7 @@
             <div class="row g-3 mt-2 align-items-end">
                 <div class="col-md-4">
                     <label class="field-label">Montant net après remise</label>
-                    <div class="form-control bg-light fw-bold" id="netAfterDiscountValue">0 FCFA</div>
+                    <div class="form-control bg-light fw-bold" id="netAfterDiscountValue">0 {{ currency_symbol() }}</div>
                 </div>
                 <div class="col-md-4">
                     <label class="field-label">Mode de paiement</label>
@@ -393,8 +395,7 @@ function showOtherField(selectEl, targetInput) {
         });
     }
 
-    function formatMoney(value) {
-        return Number(value || 0).toLocaleString('fr-FR') + ' FCFA';
+    function formatMoney(value) {window.formatMoney(return Number(value || 0));
     }
 
     function recalculateTotals() {
@@ -421,7 +422,7 @@ function showOtherField(selectEl, targetInput) {
                 servicesValue.textContent = formatMoney(servicesTotal);
             } else {
                 servicesBox.style.display = 'none';
-                servicesValue.textContent = '0 FCFA';
+                servicesValue.textContent = window.formatMoney(0);
             }
         }
 
@@ -483,7 +484,7 @@ function showOtherField(selectEl, targetInput) {
         });
 
         const totalEL = newRow.querySelector('.total-line');
-        if (totalEL) totalEL.textContent = '0 FCFA';
+        if (totalEL) totalEL.textContent = window.formatMoney(0);
 
         container.appendChild(newRow);
         Array.from(container.children).forEach((child, index) => {

@@ -57,7 +57,7 @@
                     <label class="form-label fw-bold">Montant</label>
                     <div class="input-group">
                         <input type="number" name="amount" min="0.01" step="0.01" class="form-control" required value="{{ old('amount') }}">
-                        <span class="input-group-text">FCFA</span>
+                        <span class="input-group-text">{{ currency_symbol() }}</span>
                     </div>
                 </div>
                 <div class="col-md-4">
@@ -118,7 +118,7 @@
         const select = document.getElementById(target);
         select.innerHTML = '<option value="">Sélectionner...</option>';
         transferAccounts[type].forEach(account => {
-            const option = new Option(account.name + ' - ' + account.balance.toLocaleString('fr-FR') + ' FCFA', account.id);
+            const option = new Option(account.name + ' - ' +window.formatMoney(account.balance), account.id);
             option.dataset.balance = account.balance;
             if (String(account.id) === String(selected || '')) option.selected = true;
             select.add(option);
@@ -127,7 +127,7 @@
     function updateSourceBalance() {
         const selected = document.querySelector('#source_id option:checked');
         document.getElementById('source_balance').textContent = selected && selected.value
-            ? 'Solde disponible : ' + Number(selected.dataset.balance || 0).toLocaleString('fr-FR') + ' FCFA'
+            ? 'Solde disponible : ' +window.formatMoney(Number(selected.dataset.balance || 0))
             : '';
     }
     function refreshTransferAccounts() {
