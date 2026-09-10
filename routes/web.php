@@ -76,6 +76,7 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::post('/assistant-ia', [AiAssistantController::class, 'ask'])->name('admin.ai-assistant.ask');
         Route::get('/admin/dashboard', [AdminDashboardController::class, 'index']);
         Route::get('/hub', [HubController::class, 'index'])->name('admin.hub');
+        Route::view('/design-system', 'admin.design-system', ['title' => 'Design System'])->name('admin.design-system');
         Route::get('/administration', [AdministrationController::class, 'index'])->name('admin.administration');
         Route::get('/administration/{module}', [AdministrationController::class, 'module'])->name('admin.administration.module');
         Route::post('/administration/{module}', [AdministrationController::class, 'store'])->name('admin.administration.store');

@@ -992,6 +992,10 @@
         body[data-theme-dark="1"] .app-header .topbar-search input,
         body[data-theme-dark="1"] .app-header .user-name { color: #1a1a2e !important; }
     </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" />
+    <link rel="stylesheet" href="{{ asset('css/diago.css') }}" />
 </head>
 <body id="kt_app_body" data-theme-flat="{{ !empty($activePalette['flat']) ? '1' : '0' }}" data-theme-dark="{{ !empty($activePalette['dark_mode']) ? '1' : '0' }}">
     <div class="d-flex flex-column flex-root app-root" id="kt_app_root">
