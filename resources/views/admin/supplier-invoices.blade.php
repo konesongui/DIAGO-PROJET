@@ -1,65 +1,122 @@
 @extends('admin.layout')
 
 @section('content')
-<div class="card border-0 shadow-sm">
-    <div class="card-body p-6">
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-6">
-            <div><div class="text-uppercase text-muted fs-8 fw-bold ls-1">Achats</div><h3 class="fs-2 fw-bold text-dark mb-1">{{ $title }}</h3><p class="text-muted mb-0">{{ $subtitle }}</p></div>
-            <div class="d-flex gap-2"><a href="{{ route('admin.comptabilite') }}" class="btn btn-light">Retour</a><button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#importSupplierInvoiceModal"><i class="bi bi-upload me-2"></i>Importer une facture</button></div>
+@php
+    $companyCurrency = company_currency()['code'];
+    $currencyLabel = fn ($currency) => ! $currency || $currency === $companyCurrency ? currency_symbol() : $currency;
+    $amount = fn ($value, $currency) => $value !== null ? number_format((float) $value, 0, ',', ' ') . ' ' . $currencyLabel($currency) : null;
+    $needsReview = fn ($invoice) => $invoice->status !== 'imported' || ! $invoice->supplier_name || ! $invoice->invoice_number || $invoice->total_amount === null;
+    $stats = [
+        ['Factures importées', $invoices->count(), 'bi-files', 'indigo', 'dans la liste'],
+        ['À vérifier', $invoices->filter($needsReview)->count(), 'bi-exclamation-triangle', 'red', 'données incomplètes'],
+        ['Certifiées FNE', $invoices->where('fne_status', 'certified')->count(), 'bi-patch-check', 'green', 'factures certifiées'],
+        ['Total TTC', money((float) $invoices->where('currency', $companyCurrency)->sum('total_amount')), 'bi-cash-stack', 'orange', 'factures en ' . currency_symbol()],
+    ];
+@endphp
+
+<div class="dg-font dg-scope">
+    <x-dg.page-header :title="$title" :subtitle="$subtitle" :back="route('admin.comptabilite')" back-label="Comptabilité">
+        <x-slot:actions>
+            <button type="button" class="dg-btn dg-btn--primary" data-bs-toggle="modal" data-bs-target="#importSupplierInvoiceModal"><i class="bi bi-upload"></i>Importer une facture</button>
+        </x-slot:actions>
+    </x-dg.page-header>
+
+    @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
+    @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
+
+    <div class="dg-kpi-grid">
+        @foreach($stats as [$label, $value, $icon, $color, $hint])
+            <x-dg.kpi :label="$label" :value="$value" :icon="$icon" :color="$color" :hint="$hint" />
+        @endforeach
+    </div>
+
+    <form method="POST" action="{{ route('admin.comptabilite.supplierInvoices.bulkDestroy') }}" id="supplierInvoicesForm">
+        @csrf
+        @method('DELETE')
+    </form>
+
+    <div class="dg-card dg-card--table">
+        <div class="dg-card__header flex-wrap">
+            <h2 class="dg-card__title"><span class="dg-tile dg-tile--sm dg-tone-orange"><i class="bi bi-file-earmark-text"></i></span>Suivi des achats fournisseurs</h2>
+            <form method="GET" class="d-flex flex-wrap align-items-center gap-2" role="search" aria-label="Filtrer les factures">
+                <label class="dg-search" style="max-width:320px">
+                    <i class="bi bi-search" aria-hidden="true"></i>
+                    <input type="search" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Fournisseur, numéro, fichier…" aria-label="Rechercher une facture">
+                </label>
+                <button class="dg-btn dg-btn--outline"><i class="bi bi-funnel"></i>Filtrer</button>
+                @if(!empty($filters['search']))
+                    <a href="{{ route('admin.comptabilite.supplierInvoices') }}" class="dg-btn dg-btn--outline" title="Effacer la recherche" aria-label="Effacer la recherche"><i class="bi bi-x-lg"></i></a>
+                @endif
+            </form>
         </div>
-        @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
-        @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
 
-        <form method="GET" class="row g-3 align-items-end mb-5">
-            <div class="col-md-5"><label class="form-label">Recherche</label><input name="search" class="form-control" value="{{ $filters['search'] ?? '' }}" placeholder="Fournisseur, numéro, nom du fichier"></div>
-            <div class="col-md-2"><button class="btn btn-light-primary">Filtrer</button></div>
-        </form>
-
-        <form method="POST" action="{{ route('admin.comptabilite.supplierInvoices.bulkDestroy') }}" id="supplierInvoicesForm">
-            @csrf
-            @method('DELETE')
-        </form>
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <span class="text-muted small" id="selectedInvoicesLabel">Aucune facture sélectionnée</span>
-            <button type="submit" form="supplierInvoicesForm" class="btn btn-sm btn-light-danger" id="deleteSelectedInvoices" disabled onclick="return confirm('Supprimer les factures sélectionnées ?')">
-                <i class="bi bi-trash me-1"></i>Supprimer la sélection
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <span class="dg-muted" style="font-size:13px" id="selectedInvoicesLabel">Aucune facture sélectionnée</span>
+            <button type="submit" form="supplierInvoicesForm" class="dg-btn dg-btn--outline dg-btn--sm dg-btn--danger" id="deleteSelectedInvoices" disabled onclick="return confirm('Supprimer les factures sélectionnées ?')">
+                <i class="bi bi-trash"></i>Supprimer la sélection
             </button>
         </div>
+
         <div class="table-responsive">
-            <table class="table align-middle table-row-dashed supplier-invoices-table">
-                <colgroup>
-                    <col class="selection-column">
-                    <col class="supplier-column">
-                    <col class="number-column">
-                    <col class="date-column">
-                    <col class="amount-column">
-                    <col class="amount-column">
-                    <col class="actions-column">
-                </colgroup>
-                <thead><tr class="text-muted text-uppercase fs-7"><th><input class="form-check-input" type="checkbox" id="selectAllInvoices" title="Tout sélectionner"></th><th>Fournisseur</th><th>N° facture</th><th>Date</th><th class="amount-column">Total HT</th><th class="amount-column">Total TTC</th><th class="text-end">Actions</th></tr></thead>
+            <table class="table align-middle mb-0 supplier-invoices-table">
+                <thead>
+                    <tr>
+                        <th class="supplier-invoices-table__check"><input class="form-check-input" type="checkbox" id="selectAllInvoices" title="Tout sélectionner" aria-label="Tout sélectionner"></th>
+                        <th>Date</th>
+                        <th>Fournisseur</th>
+                        <th>Justificatif</th>
+                        <th class="text-end">Total HT</th>
+                        <th class="text-end">Total TTC</th>
+                        <th>Statut</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
                 <tbody>
                 @forelse($invoices as $invoice)
                     <tr>
-                        <td><input class="form-check-input invoice-checkbox" form="supplierInvoicesForm" type="checkbox" name="invoice_ids[]" value="{{ $invoice->id }}"></td>
-                        <td>{{ $invoice->supplier_name ?: 'À vérifier' }}</td>
-                        <td>{{ $invoice->invoice_number ?: 'À vérifier' }}</td>
-                        <td>{{ $invoice->invoice_date?->format('d/m/Y') ?: '-' }}</td>
-                        <td class="amount-column"><span class="amount-value">{{ ($invoice->total_ht ?? $invoice->subtotal) !== null ? number_format((float) ($invoice->total_ht ?? $invoice->subtotal), 0, ',', ' ') . ' ' . $invoice->currency : 'À vérifier' }}</span></td>
-                        <td class="amount-column fw-bold"><span class="amount-value">{{ $invoice->total_amount !== null ? number_format((float) $invoice->total_amount, 0, ',', ' ') . ' ' . $invoice->currency : 'À vérifier' }}</span></td>
+                        <td><input class="form-check-input invoice-checkbox" form="supplierInvoicesForm" type="checkbox" name="invoice_ids[]" value="{{ $invoice->id }}" aria-label="Sélectionner la facture {{ $invoice->invoice_number ?: $invoice->id }}"></td>
+                        <td class="text-nowrap">{{ $invoice->invoice_date?->format('d/m/Y') ?: '—' }}</td>
+                        <td>
+                            <a href="{{ route('admin.comptabilite.supplierInvoices.show', $invoice) }}" class="fw-semibold text-reset text-decoration-none">{{ $invoice->supplier_name ?: 'Fournisseur à vérifier' }}</a>
+                            <span class="d-block dg-muted" style="font-size:12.5px">N° {{ $invoice->invoice_number ?: 'à vérifier' }}</span>
+                        </td>
+                        <td>
+                            @if($invoice->file_path)
+                                <a class="dg-chip" target="_blank" href="{{ route('admin.comptabilite.supplierInvoices.pdf', $invoice) }}" title="{{ $invoice->original_filename }}"><i class="bi bi-file-earmark-pdf"></i>{{ \Illuminate\Support\Str::limit($invoice->original_filename ?: 'Facture.pdf', 18) }}</a>
+                            @else
+                                <span class="dg-badge dg-badge--warning"><i class="bi bi-exclamation-triangle"></i>Manquant</span>
+                            @endif
+                        </td>
+                        <td class="text-end dg-cell-num">{{ $amount($invoice->total_ht ?? $invoice->subtotal, $invoice->currency) ?? '—' }}</td>
+                        <td class="text-end dg-cell-num">{{ $amount($invoice->total_amount, $invoice->currency) ?? '—' }}</td>
+                        <td>
+                            <div class="d-flex flex-wrap gap-1">
+                                @if($needsReview($invoice))
+                                    <span class="dg-badge dg-badge--warning">À vérifier</span>
+                                @else
+                                    <span class="dg-badge dg-badge--success">Importée</span>
+                                @endif
+                                @if($invoice->fne_status === 'certified')
+                                    <span class="dg-badge dg-badge--neutral"><i class="bi bi-patch-check"></i>FNE</span>
+                                @elseif($invoice->fne_status === 'failed')
+                                    <span class="dg-badge dg-badge--danger">FNE : échec</span>
+                                @endif
+                            </div>
+                        </td>
                         <td class="text-end">
                             <div class="dropdown">
                                 <button class="btn btn-sm btn-light action-menu-button" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Actions" aria-label="Actions"></button>
-                                <ul class="dropdown-menu dropdown-menu-end">
-                                    <li><a class="dropdown-item" href="{{ route('admin.comptabilite.supplierInvoices.show', $invoice) }}"><i class="bi bi-eye me-2"></i>Détails</a></li>
-                                    <li><a class="dropdown-item" target="_blank" href="{{ route('admin.comptabilite.supplierInvoices.pdf', $invoice) }}"><i class="bi bi-file-earmark-pdf me-2"></i>Voir le PDF</a></li>
-                                    @if($invoice->fne_status === 'certified')<li><a class="dropdown-item text-success" target="_blank" href="{{ route('admin.comptabilite.supplierInvoices.printFne', $invoice) }}"><i class="bi bi-printer me-2"></i>Impression FNE</a></li>@endif
-                                    @if($invoice->fne_status !== 'certified')<li><form method="POST" action="{{ route('admin.comptabilite.supplierInvoices.fne', $invoice) }}" onsubmit="return confirm('Envoyer cette facture à la FNE ?')">@csrf<button class="dropdown-item"><i class="bi bi-patch-check me-2"></i>Certifier FNE</button></form></li>@endif
+                                <ul class="dropdown-menu dropdown-menu-end dg-dropdown">
+                                    <li><a class="dropdown-item" href="{{ route('admin.comptabilite.supplierInvoices.show', $invoice) }}"><i class="bi bi-eye"></i>Détails</a></li>
+                                    <li><a class="dropdown-item" target="_blank" href="{{ route('admin.comptabilite.supplierInvoices.pdf', $invoice) }}"><i class="bi bi-file-earmark-pdf"></i>Voir le PDF</a></li>
+                                    @if($invoice->fne_status === 'certified')<li><a class="dropdown-item" target="_blank" href="{{ route('admin.comptabilite.supplierInvoices.printFne', $invoice) }}"><i class="bi bi-printer"></i>Impression FNE</a></li>@endif
+                                    @if($invoice->fne_status !== 'certified')<li><form method="POST" action="{{ route('admin.comptabilite.supplierInvoices.fne', $invoice) }}" onsubmit="return confirm('Envoyer cette facture à la FNE ?')">@csrf<button class="dropdown-item"><i class="bi bi-patch-check"></i>Certifier FNE</button></form></li>@endif
                                     <li><hr class="dropdown-divider"></li>
                                     <li>
                                         <form method="POST" action="{{ route('admin.comptabilite.supplierInvoices.destroy', $invoice) }}" onsubmit="return confirm('Supprimer cette facture ?')">
                                             @csrf
                                             @method('DELETE')
-                                            <button class="dropdown-item text-danger" type="submit"><i class="bi bi-trash me-2"></i>Supprimer</button>
+                                            <button class="dropdown-item text-danger" type="submit"><i class="bi bi-trash"></i>Supprimer</button>
                                         </form>
                                     </li>
                                 </ul>
@@ -67,89 +124,48 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="text-center text-muted py-8">Aucune facture fournisseur importée.</td></tr>
+                    <tr>
+                        <td colspan="8" class="p-5">
+                            <div class="dg-chart-empty" style="min-height:220px">
+                                <span class="dg-tile dg-tone-orange"><i class="bi bi-file-earmark-arrow-up"></i></span>
+                                <div>
+                                    <strong>{{ !empty($filters['search']) ? 'Aucune facture ne correspond à votre recherche' : 'Aucune facture fournisseur importée' }}</strong>
+                                    Importez une facture PDF : ses informations sont extraites automatiquement.
+                                </div>
+                                @if(empty($filters['search']))
+                                    <button type="button" class="dg-btn dg-btn--primary dg-btn--sm" data-bs-toggle="modal" data-bs-target="#importSupplierInvoiceModal"><i class="bi bi-upload"></i>Importer une facture</button>
+                                @endif
+                            </div>
+                        </td>
+                    </tr>
                 @endforelse
                 </tbody>
             </table>
         </div>
     </div>
-</div>
 
-<div class="modal fade" id="importSupplierInvoiceModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="{{ route('admin.comptabilite.supplierInvoices.import') }}" enctype="multipart/form-data">
-                @csrf
-                <div class="modal-header"><h5 class="modal-title">Importer une facture fournisseur</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body"><label class="form-label fw-bold">Fichier PDF</label><input type="file" name="invoice" class="form-control" accept="application/pdf,.pdf" required><div class="form-text">PDF uniquement, taille maximale 10 Mo.</div></div>
-                <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Annuler</button><button class="btn btn-primary">Charger et extraire</button></div>
-            </form>
+    <div class="modal fade" id="importSupplierInvoiceModal" tabindex="-1" aria-labelledby="importSupplierInvoiceTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="POST" action="{{ route('admin.comptabilite.supplierInvoices.import') }}" enctype="multipart/form-data">
+                    @csrf
+                    <div class="modal-header"><h5 class="modal-title" id="importSupplierInvoiceTitle"><i class="bi bi-upload me-2"></i>Importer une facture fournisseur</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button></div>
+                    <div class="modal-body">
+                        <label class="form-label" for="supplierInvoiceFile">Fichier PDF</label>
+                        <input type="file" id="supplierInvoiceFile" name="invoice" class="form-control" accept="application/pdf,.pdf" required>
+                        <div class="form-text">PDF uniquement, 10 Mo maximum. Le fournisseur, le numéro, la date et les montants sont extraits automatiquement ; vous pourrez les vérifier sur la fiche.</div>
+                    </div>
+                    <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Annuler</button><button class="btn btn-primary"><i class="bi bi-magic me-1"></i>Charger et extraire</button></div>
+                </form>
+            </div>
         </div>
     </div>
 </div>
+
 <style>
-.supplier-invoices-table {
-    min-width: 820px;
-    margin-bottom: 0;
-    table-layout: fixed;
-}
-
-.supplier-invoices-table th,
-.supplier-invoices-table td {
-    vertical-align: middle;
-    padding: .85rem .75rem;
-}
-
-.supplier-invoices-table th {
-    white-space: nowrap;
-    font-size: .72rem;
-    letter-spacing: .04em;
-}
-
-.supplier-invoices-table td {
-    font-size: .9rem;
-}
-
-.supplier-invoices-table .selection-column {
-    width: 44px;
-}
-
-.supplier-invoices-table .supplier-column {
-    width: 240px;
-}
-
-.supplier-invoices-table .number-column {
-    width: 125px;
-}
-
-.supplier-invoices-table .date-column {
-    width: 105px;
-}
-
-.supplier-invoices-table .actions-column {
-    width: 90px;
-}
-
-.supplier-invoices-table td:nth-child(2),
-.supplier-invoices-table td:nth-child(3) {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.supplier-invoices-table .amount-column {
-    width: 135px;
-    min-width: 135px;
-    text-align: right;
-    white-space: nowrap;
-}
-
-.supplier-invoices-table .amount-value {
-    display: inline-block;
-    min-width: 0;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-}
+    .supplier-invoices-table { min-width: 900px; }
+    .supplier-invoices-table__check { width: 44px; }
+    .supplier-invoices-table td:nth-child(3) { min-width: 210px; }
 </style>
 <script>
 document.addEventListener('DOMContentLoaded', function () {

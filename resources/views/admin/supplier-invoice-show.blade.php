@@ -1,50 +1,129 @@
 @extends('admin.layout')
 
 @section('content')
-<div class="card border-0 shadow-sm">
-    <div class="card-body p-6">
-        <div class="d-flex justify-content-between align-items-center mb-6"><div><div class="text-uppercase text-muted fs-8 fw-bold ls-1">Facture fournisseur</div><h3 class="fs-2 fw-bold text-dark mb-1">Détail de la facture</h3><p class="text-muted mb-0">{{ $invoice->original_filename }}</p></div><div class="d-flex gap-2"><a href="{{ route('admin.comptabilite.supplierInvoices') }}" class="btn btn-light">Retour</a><a target="_blank" href="{{ route('admin.comptabilite.supplierInvoices.print', $invoice) }}" class="btn btn-light-primary"><i class="bi bi-printer me-2"></i>Imprimer</a><a target="_blank" href="{{ route('admin.comptabilite.supplierInvoices.pdf', $invoice) }}" class="btn btn-danger"><i class="bi bi-file-earmark-pdf me-2"></i>Voir le PDF</a></div></div>
-        <div class="row g-4 mb-6">
-            @foreach([['Fournisseur', $invoice->supplier_name ?: 'À vérifier'], ['N° facture', $invoice->invoice_number ?: 'À vérifier'], ['Total HT', ($invoice->total_ht ?? $invoice->subtotal) !== null ? number_format((float)($invoice->total_ht ?? $invoice->subtotal), 0, ',', ' ') . ' ' . $invoice->currency : 'À vérifier'], ['Total TTC', $invoice->total_amount !== null ? number_format((float)$invoice->total_amount, 0, ',', ' ') . ' ' . $invoice->currency : 'À vérifier']] as $item)
-                <div class="col-md-3"><div class="bg-light rounded-3 p-4"><small class="text-muted">{{ $item[0] }}</small><div class="fw-bold mt-2">{{ $item[1] }}</div></div></div>
-            @endforeach
-        </div>
-        <div class="row g-4 mb-6">
-            <div class="col-md-4"><div class="bg-light rounded-3 p-4"><small class="text-muted">Fichier source</small><div class="fw-bold mt-2 text-break">{{ $invoice->original_filename ?: '-' }}</div></div></div>
-            <div class="col-md-4"><div class="bg-light rounded-3 p-4"><small class="text-muted">État de l'extraction</small><div class="fw-bold mt-2">{{ $invoice->status === 'imported' ? 'Importée' : 'À vérifier' }}</div></div></div>
-            <div class="col-md-4"><div class="bg-light rounded-3 p-4"><small class="text-muted">Certification FNE</small><div class="fw-bold mt-2">{{ $invoice->fne_status === 'certified' ? 'Certifiée' : ($invoice->fne_status === 'failed' ? 'Échec' : 'Non certifiée') }}@if($invoice->fne_reference)<br><span class="text-muted fs-8">{{ $invoice->fne_reference }}</span>@endif</div></div></div>
-        </div>
+@php
+    $currency = ! $invoice->currency || $invoice->currency === company_currency()['code'] ? currency_symbol() : $invoice->currency;
+    $amount = fn ($value) => $value !== null ? number_format((float) $value, 0, ',', ' ') . ' ' . $currency : 'À vérifier';
+    // Libellés des données lues dans le PDF ; les montants sont formatés.
+    $extractedLabels = [
+        'invoice_number' => 'N° facture', 'supplier_name' => 'Fournisseur', 'supplier_tax_id' => 'NCC fournisseur',
+        'invoice_date' => 'Date de facture', 'due_date' => 'Échéance', 'subtotal' => 'Sous-total',
+        'total_ht' => 'Total HT', 'tax_amount' => 'Montant de TVA', 'total_amount' => 'Total TTC',
+        'currency' => 'Devise', 'items' => 'Lignes',
+    ];
+    $amountKeys = ['subtotal', 'total_ht', 'tax_amount', 'total_amount'];
+    $regimeUnconfirmed = in_array($invoice->tax_regime, [null, '', 'unknown'], true);
+    $fneLabel = $invoice->fne_status === 'certified' ? 'Certifiée' : ($invoice->fne_status === 'failed' ? 'Échec' : 'Non certifiée');
+    $fneTone = $invoice->fne_status === 'certified' ? 'success' : ($invoice->fne_status === 'failed' ? 'danger' : 'neutral');
+@endphp
 
-        <div class="alert {{ in_array($invoice->tax_regime, [null, '', 'unknown'], true) ? 'alert-warning' : 'alert-light' }} d-flex flex-wrap align-items-center gap-4 mt-5">
-            <div class="flex-grow-1">
-                <div class="fw-bold">Régime fiscal déclaré</div>
-                <div class="fs-7 text-muted">
-                    @if(in_array($invoice->tax_regime, [null, '', 'unknown'], true))
-                        Ce régime est issu d'une lecture automatique du PDF et n'a pas été confirmé.
-                        La certification est bloquée tant qu'il n'est pas renseigné.
-                    @else
-                        Régime confirmé : <strong>{{ \App\Models\TaxRate::regimes()[$invoice->tax_regime] ?? $invoice->tax_regime }}</strong>.
-                    @endif
-                </div>
+<div class="dg-font dg-scope">
+    <x-dg.page-header :title="$invoice->invoice_number ? 'Facture ' . $invoice->invoice_number : 'Détail de la facture'" :subtitle="$invoice->original_filename" :back="route('admin.comptabilite.supplierInvoices')" back-label="Factures fournisseurs">
+        <x-slot:actions>
+            <a target="_blank" href="{{ route('admin.comptabilite.supplierInvoices.print', $invoice) }}" class="dg-btn dg-btn--outline"><i class="bi bi-printer"></i>Imprimer</a>
+            <a target="_blank" href="{{ route('admin.comptabilite.supplierInvoices.pdf', $invoice) }}" class="dg-btn dg-btn--secondary"><i class="bi bi-file-earmark-pdf"></i>Voir le PDF</a>
+        </x-slot:actions>
+    </x-dg.page-header>
+
+    @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
+    @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
+
+    <div class="dg-kpi-grid">
+        <x-dg.kpi label="Fournisseur" :value="$invoice->supplier_name ?: 'À vérifier'" icon="bi-shop" color="indigo" :hint="$invoice->supplier_tax_id ? 'NCC ' . $invoice->supplier_tax_id : null" />
+        <x-dg.kpi label="N° facture" :value="$invoice->invoice_number ?: 'À vérifier'" icon="bi-hash" color="blue" :hint="$invoice->invoice_date ? 'du ' . $invoice->invoice_date->format('d/m/Y') : null" />
+        <x-dg.kpi label="Total HT" :value="$amount($invoice->total_ht ?? $invoice->subtotal)" icon="bi-calculator" color="teal" />
+        <x-dg.kpi label="Total TTC" :value="$amount($invoice->total_amount)" icon="bi-cash-stack" color="orange" />
+    </div>
+
+    <div class="dg-grid-3 mb-6">
+        <div class="dg-card d-flex align-items-center gap-3">
+            <span class="dg-tile dg-tone-pink"><i class="bi bi-file-earmark-pdf"></i></span>
+            <div style="min-width:0">
+                <div class="dg-muted" style="font-size:13px">Fichier source</div>
+                <div class="fw-semibold text-break">{{ $invoice->original_filename ?: '—' }}</div>
             </div>
-            @if($invoice->fne_status !== 'certified')
-            <form method="POST" action="{{ route('admin.comptabilite.supplierInvoices.regime', $invoice) }}" class="d-flex gap-3">
+        </div>
+        <div class="dg-card d-flex align-items-center gap-3">
+            <span class="dg-tile dg-tone-{{ $invoice->status === 'imported' ? 'green' : 'orange' }}"><i class="bi bi-magic"></i></span>
+            <div>
+                <div class="dg-muted" style="font-size:13px">État de l’extraction</div>
+                <span class="dg-badge dg-badge--{{ $invoice->status === 'imported' ? 'success' : 'warning' }} mt-1">{{ $invoice->status === 'imported' ? 'Importée' : 'À vérifier' }}</span>
+            </div>
+        </div>
+        <div class="dg-card d-flex align-items-center gap-3">
+            <span class="dg-tile dg-tone-{{ $invoice->fne_status === 'certified' ? 'green' : ($invoice->fne_status === 'failed' ? 'red' : 'navy') }}"><i class="bi bi-patch-check"></i></span>
+            <div>
+                <div class="dg-muted" style="font-size:13px">Certification FNE</div>
+                <span class="dg-badge dg-badge--{{ $fneTone }} mt-1">{{ $fneLabel }}</span>
+                @if($invoice->fne_reference)<span class="d-block dg-muted mt-1" style="font-size:12.5px">{{ $invoice->fne_reference }}</span>@endif
+            </div>
+        </div>
+    </div>
+
+    <div class="dg-callout dg-tone-{{ $regimeUnconfirmed ? 'orange' : 'green' }} mb-6">
+        <span class="dg-tile"><i class="bi {{ $regimeUnconfirmed ? 'bi-exclamation-triangle' : 'bi-shield-check' }}"></i></span>
+        <div class="flex-grow-1">
+            <div class="fw-semibold">Régime fiscal déclaré</div>
+            <div style="font-size:13.5px" class="dg-muted">
+                @if($regimeUnconfirmed)
+                    Ce régime est issu d’une lecture automatique du PDF et n’a pas été confirmé. La certification est bloquée tant qu’il n’est pas renseigné.
+                @else
+                    Régime confirmé : <strong class="text-dark">{{ \App\Models\TaxRate::regimes()[$invoice->tax_regime] ?? $invoice->tax_regime }}</strong>.
+                @endif
+            </div>
+        </div>
+        @if($invoice->fne_status !== 'certified')
+            <form method="POST" action="{{ route('admin.comptabilite.supplierInvoices.regime', $invoice) }}" class="d-flex flex-wrap gap-2">
                 @csrf @method('PATCH')
-                <select name="tax_regime" class="form-select form-select-sm" style="min-width:190px">
+                <select name="tax_regime" class="form-select" style="min-width:210px" aria-label="Régime fiscal">
                     @foreach($regimes ?? [] as $key => $label)
                         <option value="{{ $key }}" @selected($invoice->tax_regime === $key)>{{ $label }}</option>
                     @endforeach
                 </select>
-                <button class="btn btn-sm btn-primary">Confirmer</button>
+                <button class="btn btn-primary">Confirmer</button>
             </form>
-            @endif
-        </div>
-
-        <div class="row g-5">
-            <div class="col-lg-7"><h5 class="fw-bold mb-4">Données extraites</h5><table class="table table-bordered align-middle"><tbody>@foreach(($invoice->extracted_data ?? []) as $key => $value)<tr><th class="text-muted" style="width:35%">{{ ucwords(str_replace('_', ' ', $key)) }}</th><td>{{ is_scalar($value) && $value !== null && $value !== '' ? $value : 'Non détecté' }}</td></tr>@endforeach</tbody></table></div>
-            <div class="col-lg-5"><h5 class="fw-bold mb-4">Aperçu PDF</h5><iframe src="{{ route('admin.comptabilite.supplierInvoices.pdf', $invoice) }}" style="width:100%;height:520px;border:1px solid #e5e7eb;border-radius:12px;"></iframe></div>
-        </div>
-        @if($invoice->raw_text)<details class="mt-6"><summary class="fw-bold">Texte extrait brut</summary><pre class="bg-light p-4 mt-3 rounded-3" style="white-space:pre-wrap;">{{ $invoice->raw_text }}</pre></details>@endif
+        @endif
     </div>
+
+    <div class="dg-grid-halves">
+        <x-dg.card title="Données extraites" icon="bi-list-check" color="blue" class="dg-card--table">
+            <div class="table-responsive">
+                <table class="table align-middle mb-0 no-export">
+                    <tbody>
+                        @forelse(($invoice->extracted_data ?? []) as $key => $value)
+                            <tr>
+                                <td class="dg-muted" style="width:40%">{{ $extractedLabels[$key] ?? ucfirst(str_replace('_', ' ', $key)) }}</td>
+                                <td class="fw-semibold">
+                                    @if(is_numeric($value) && in_array($key, $amountKeys, true))
+                                        {{ $amount($value) }}
+                                    @elseif(in_array($key, ['invoice_date', 'due_date'], true) && is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value))
+                                        {{ \Carbon\Carbon::parse($value)->format('d/m/Y') }}
+                                    @elseif(is_scalar($value) && $value !== null && $value !== '')
+                                        {{ $value }}
+                                    @elseif(is_array($value) && count($value))
+                                        <span class="dg-badge dg-badge--neutral">{{ count($value) }} élément(s)</span>
+                                    @else
+                                        <span class="dg-badge dg-badge--warning">Non détecté</span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="2" class="text-center dg-muted py-6">Aucune donnée extraite.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </x-dg.card>
+        <x-dg.card title="Aperçu PDF" icon="bi-file-earmark-pdf" color="pink">
+            <iframe src="{{ route('admin.comptabilite.supplierInvoices.pdf', $invoice) }}" title="Aperçu du PDF de la facture" style="width:100%;height:540px;border:1px solid var(--dg-border);border-radius:var(--dg-radius);"></iframe>
+        </x-dg.card>
+    </div>
+
+    @if($invoice->raw_text)
+        <details class="dg-card mt-6">
+            <summary class="fw-semibold" style="cursor:pointer">Texte extrait brut</summary>
+            <pre class="mt-3 mb-0 p-4" style="white-space:pre-wrap;background:var(--dg-table-head);border-radius:var(--dg-radius);font-size:13px;">{{ $invoice->raw_text }}</pre>
+        </details>
+    @endif
 </div>
 @endsection

@@ -3,6 +3,8 @@
 @php
     // Caisses et banques suivent la charte (refonte 4b) ; les rapports gardent l'ancienne présentation jusqu'à leur refonte.
     $isTreasury = in_array($moduleType ?? '', ['caisses', 'banques'], true);
+    // Écrans présentés avec la charte : trésorerie (4b) et rapports (4d).
+    $isRedesigned = in_array($moduleType ?? '', ['caisses', 'banques', 'rapports', 'rapport_financier'], true);
 @endphp
 
 @if($isTreasury)
@@ -17,10 +19,24 @@
 @endif
 
 @section('content')
-<div class="{{ $isTreasury ? 'dg-font dg-scope' : '' }}">
-@if($isTreasury)
-    <x-dg.page-header :title="$title" :subtitle="$subtitle" :back="route('admin.comptabilite')" back-label="Comptabilité">
-        @if($moduleType === 'caisses')
+<div class="{{ $isRedesigned ? 'dg-font dg-scope' : '' }}">
+@if($isRedesigned)
+    @php
+        $headerSubtitle = $moduleType === 'rapport_financier'
+            ? 'Ventes, encaissements et dépenses du ' . \Carbon\Carbon::parse($filters['date_debut'])->format('d/m/Y') . ' au ' . \Carbon\Carbon::parse($filters['date_fin'])->format('d/m/Y') . '.'
+            : $subtitle;
+    @endphp
+    <x-dg.page-header :title="$title" :subtitle="$headerSubtitle" :back="route('admin.comptabilite')" back-label="Comptabilité">
+        @if($moduleType === 'rapport_financier')
+            <x-slot:actions>
+                <form method="GET" action="{{ route('admin.comptabilite.rapport_financier') }}" class="dg-period" aria-label="Période du rapport">
+                    <input type="date" name="date_debut" value="{{ $filters['date_debut'] }}" class="dg-input" aria-label="Date de début">
+                    <span class="dg-period__sep">au</span>
+                    <input type="date" name="date_fin" value="{{ $filters['date_fin'] }}" class="dg-input" aria-label="Date de fin">
+                    <button type="submit" class="dg-btn dg-btn--outline"><i class="bi bi-funnel"></i>Filtrer</button>
+                </form>
+            </x-slot:actions>
+        @elseif($moduleType === 'caisses')
             <x-slot:actions>
                 <button type="button" class="dg-btn dg-btn--outline" data-bs-toggle="modal" data-bs-target="#createCashAccountModal"><i class="bi bi-plus-lg"></i>Nouvelle caisse</button>
                 <button type="button" class="dg-btn dg-btn--primary" data-bs-toggle="modal" data-bs-target="#createCashMovementModal"><i class="bi bi-plus-lg"></i>Nouveau mouvement</button>
@@ -1190,826 +1206,415 @@
                 });
             </script>
         @elseif(($moduleType ?? '') === 'rapports')
-            <style>
-                .treasury-summary-card {
-                    border: 1px solid #edf1f5;
-                    border-radius: 18px;
-                    background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
-                    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.04);
-                    padding: 1.1rem 1.15rem;
-                    height: 100%;
-                    border-left: 4px solid #3b82f6;
-                }
-                .treasury-summary-card:nth-child(2) { border-left-color: #22c55e; }
-                .treasury-summary-card:nth-child(3) { border-left-color: #8b5cf6; }
-                .treasury-summary-card:nth-child(4) { border-left-color: #f59e0b; }
-                .treasury-summary-card .label {
-                    color: #64748b;
-                    font-size: 0.7rem;
-                    letter-spacing: 0.08em;
-                    text-transform: uppercase;
-                    font-weight: 700;
-                }
-                .treasury-summary-card .value {
-                    font-size: 1.5rem;
-                    font-weight: 800;
-                    color: #0f172a;
-                    margin-top: 0.5rem;
-                    line-height: 1.2;
-                    letter-spacing: -0.02em;
-                }
-                .treasury-summary-card .change {
-                    color: #10b981;
-                    font-size: 0.75rem;
-                    font-weight: 600;
-                    margin-top: 0.5rem;
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 0.35rem;
-                }
-                .treasury-panel {
-                    background: #ffffff;
-                    border: 1px solid #edf1f5;
-                    border-radius: 18px;
-                    box-shadow: 0 12px 26px rgba(15, 23, 42, 0.04);
-                    padding: 1.35rem 1.3rem;
-                    height: 100%;
-                }
-                .treasury-panel h5 {
-                    color: #0f172a;
-                    font-weight: 700;
-                    margin-bottom: 0;
-                    font-size: 1.05rem;
-                }
-                .treasury-list-row {
-                    border: 1px solid #edf1f5;
-                    border-radius: 12px;
-                    background: #f8fafc;
-                    padding: 0.8rem 0.95rem;
-                }
-                .treasury-account-card {
-                    border: 1px solid #edf1f5;
-                    border-radius: 18px;
-                    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
-                    padding: 1rem 1.1rem;
-                    height: 100%;
-                }
-                .treasury-account-card .bank-logo {
-                    width: 46px;
-                    height: 46px;
-                    border-radius: 14px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-weight: 800;
-                    color: #0f172a;
-                    background: #e2e8f0;
-                }
-                .treasury-account-card .status-pill {
-                    border-radius: 999px;
-                    padding: 0.38rem 0.7rem;
-                    font-size: 0.7rem;
-                    font-weight: 700;
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 0.35rem;
-                }
-                .status-pill.open {
-                    background: rgba(16, 185, 129, 0.12);
-                    color: #047857;
-                }
-                .status-pill.closed {
-                    background: rgba(148, 163, 184, 0.12);
-                    color: #475569;
-                }
-                .treasury-chart {
-                    display: flex;
-                    align-items: end;
-                    justify-content: space-between;
-                    gap: 0.75rem;
-                    min-height: 220px;
-                    padding-top: 1rem;
-                }
-                .treasury-chart .column {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: end;
-                    gap: 0.5rem;
-                    width: 100%;
-                    flex: 1;
-                }
-                .treasury-chart .column .bar {
-                    width: 100%;
-                    max-width: 46px;
-                    border-radius: 12px 12px 0 0;
-                    background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
-                    min-height: 24px;
-                    box-shadow: inset 0 -10px 18px rgba(37, 99, 235, 0.18);
-                }
-                .treasury-chart .column small {
-                    color: #64748b;
-                    font-weight: 600;
-                }
-                .donut {
-                    width: 165px;
-                    height: 165px;
-                    border-radius: 50%;
-                    position: relative;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    background: conic-gradient(#2563eb 0 42%, #22c55e 42% 72%, #f59e0b 72% 89%, #a855f7 89% 100%);
-                }
-                .donut::before {
-                    content: "";
-                    position: absolute;
-                    inset: 20px;
-                    background: white;
-                    border-radius: 50%;
-                    box-shadow: inset 0 0 0 1px #edf1f5;
-                }
-                .donut-inner {
-                    position: relative;
-                    z-index: 1;
-                    text-align: center;
-                }
-                .donut-inner strong {
-                    display: block;
-                    font-size: 1.5rem;
-                    color: #0f172a;
-                }
-                .donut-inner small {
-                    color: #64748b;
-                    font-weight: 600;
-                }
-                .legend-item {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    gap: 0.75rem;
-                    padding: 0.55rem 0;
-                    border-bottom: 1px solid #f1f5f9;
-                }
-                .legend-item:last-child { border-bottom: 0; }
-                .legend-left {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 0.7rem;
-                    color: #334155;
-                    font-size: 0.9rem;
-                    font-weight: 600;
-                }
-                .legend-dot {
-                    width: 10px;
-                    height: 10px;
-                    border-radius: 50%;
-                    display: inline-block;
-                }
-                .muted-label {
-                    color: #64748b;
-                    font-size: 0.8rem;
-                    font-weight: 700;
-                    letter-spacing: 0.05em;
-                    text-transform: uppercase;
-                }
-                .treasury-report-shell {
-                    padding: 1.5rem;
-                    border-radius: 20px;
-                    background: #f3f6fa;
-                }
-                .treasury-report-hero {
-                    position: relative;
-                    overflow: hidden;
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    gap: 1.5rem;
-                    min-height: 150px;
-                    margin-bottom: 1.25rem;
-                    padding: 1.8rem 2rem;
-                    border-radius: 18px;
-                    color: #fff;
-                    background: linear-gradient(118deg, #123e68 0%, #1b628d 58%, #35a98a 100%);
-                    box-shadow: 0 16px 32px rgba(18, 62, 104, .18);
-                }
-                .treasury-report-hero::after {
-                    content: "";
-                    position: absolute;
-                    width: 260px;
-                    height: 260px;
-                    right: -75px;
-                    top: -110px;
-                    border: 1px solid rgba(255,255,255,.16);
-                    border-radius: 50%;
-                    box-shadow: 0 0 0 24px rgba(255,255,255,.04), 0 0 0 48px rgba(255,255,255,.03);
-                }
-                .treasury-report-hero h2 { position: relative; z-index: 1; margin: 0; font-size: 1.45rem; font-weight: 800; letter-spacing: -.03em; }
-                .treasury-report-hero p { position: relative; z-index: 1; margin: .45rem 0 0; color: rgba(255,255,255,.74); font-size: .82rem; }
-                .treasury-report-badge { position: relative; z-index: 1; padding: .75rem 1rem; border: 1px solid rgba(255,255,255,.22); border-radius: 11px; background: rgba(255,255,255,.1); color: #fff; font-size: .75rem; font-weight: 700; white-space: nowrap; }
-                .treasury-report-shell .treasury-summary-card,
-                .treasury-report-shell .treasury-panel {
-                    border-color: #e5ebf2;
-                    box-shadow: 0 7px 20px rgba(31,55,80,.045);
-                }
-                .treasury-report-shell .treasury-summary-card { border-radius: 15px; background: #fff; }
-                .treasury-report-shell .treasury-panel { border-radius: 16px; }
-                .treasury-report-shell .treasury-panel h5 { color: #172b4d; font-size: .95rem; }
-                .treasury-report-shell .treasury-list-row,
-                .treasury-report-shell .treasury-account-card { border-color: #e8eef4; background: #fff; border-radius: 13px; }
-                .treasury-report-shell .treasury-chart { min-height: 245px; border-radius: 12px; background: linear-gradient(to top, rgba(148,163,184,.08), rgba(148,163,184,.02)); }
-                .treasury-report-shell .treasury-chart .bar { background: linear-gradient(180deg, #4ba9d1 0%, #1b628d 100%); }
-                .treasury-report-shell .donut { box-shadow: 0 10px 24px rgba(27,98,141,.12); }
-                .treasury-report-shell .badge { font-size: .68rem; font-weight: 700; }
-                @media (max-width: 650px) {
-                    .treasury-report-shell { padding: .75rem; }
-                    .treasury-report-hero { align-items: flex-start; flex-direction: column; padding: 1.35rem; }
-                }
-            </style>
+            @php
+                $typeStyles = [
+                    'Entrées' => ['green', 'bi-box-arrow-in-down', 'dg-amount-positive'],
+                    'Sorties' => ['red', 'bi-box-arrow-up', 'dg-amount-negative'],
+                    'Virements' => ['purple', 'bi-arrow-left-right', ''],
+                    'Solde réel' => ['blue', 'bi-wallet2', ''],
+                ];
+                $flowRow = fn (bool $isIn) => $isIn ? ['green', 'bi-arrow-down-left', 'dg-amount-positive', '+'] : ['red', 'bi-arrow-up-right', 'dg-amount-negative', '-'];
+                $treasuryChartHasData = collect($chartData ?? [])->sum('value') > 0;
+                $distributionList = collect($distribution ?? []);
+            @endphp
 
-            <div class="treasury-report-shell">
-            <div class="treasury-report-hero">
-                <div>
-                    <h2>État de la trésorerie</h2>
-                    <p>Suivez les liquidités, les caisses, les banques et les opérations récentes.</p>
-                </div>
-                <div class="treasury-report-badge"><i class="bi bi-shield-check me-2"></i>Vue trésorerie</div>
-            </div>
-            <div class="row g-4 mb-5">
+            <div class="dg-kpi-grid">
                 @foreach(($summary ?? []) as $item)
-                    <div class="col-xl-3 col-md-6">
-                        <div class="treasury-summary-card">
-                            <div class="label">{{ $item['label'] }}</div>
-                            <div class="value">{{ $item['value'] }}</div>
-                            <div class="change"><i class="bi bi-arrow-up-right-circle"></i>{{ $item['change'] }}</div>
-                        </div>
-                    </div>
+                    <x-dg.kpi :label="$item['label']" :value="$item['value']" :hint="$item['change']"
+                        :icon="['bi-wallet2', 'bi-cash-stack', 'bi-bank', 'bi-arrow-left-right'][$loop->index] ?? null"
+                        :color="['blue', 'orange', 'indigo', 'purple'][$loop->index] ?? 'navy'" />
                 @endforeach
             </div>
 
-            <div class="row g-4 mb-5">
-                <div class="col-xl-7">
-                    <div class="treasury-panel">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h5>Caisses actives</h5>
-                            <span class="badge bg-light text-dark rounded-pill px-3 py-2">{{ ($activeCash ?? collect())->count() }} active(s)</span>
-                        </div>
-                        <div class="row g-3">
-                            @forelse(($activeCash ?? collect()) as $account)
-                                <div class="col-md-6">
-                                    <div class="treasury-account-card">
-                                        <div class="d-flex align-items-center justify-content-between mb-3">
-                                            <div class="d-flex align-items-center gap-3">
-                                                <div class="bank-logo" style="background: {{ $account->logo_bg ?? '#dbeafe' }}; color: {{ $account->logo_text ?? '#0f172a' }};">
-                                                    {{ strtoupper(substr($account->name, 0, 2)) }}
-                                                </div>
-                                                <div>
-                                                    <div class="fw-bold text-dark">{{ $account->name }}</div>
-                                                    <div class="text-muted small">{{ $account->account_type === 'mobile_money' ? 'Mobile Money' : 'Caisse' }}</div>
-                                                </div>
-                                            </div>
-                                            <span class="status-pill {{ $account->is_active ? 'open' : 'closed' }}">
-                                                {{ $account->is_active ? 'Ouverte' : 'Fermée' }}
-                                            </span>
-                                        </div>
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <span class="muted-label">Solde</span>
-                                            <span class="fw-bold text-dark">{{ money((float) $account->balance) }}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            @empty
-                                <div class="col-12">
-                                    <div class="alert alert-light border mb-0">Aucune caisse active pour cette entreprise.</div>
-                                </div>
-                            @endforelse
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-xl-5">
-                    <div class="treasury-panel">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h5>Banques actives</h5>
-                            <span class="badge bg-light text-dark rounded-pill px-3 py-2">{{ count($bankAccounts ?? []) }} compte(s)</span>
-                        </div>
-                        <div class="d-grid gap-3">
-                            @forelse(($bankAccounts ?? []) as $account)
-                                <div class="treasury-account-card">
-                                    <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
-                                        <div class="d-flex align-items-center gap-3">
-                                            <div class="bank-logo" style="background: {{ $account->logo_bg ?? '#dbeafe' }}; color: {{ $account->logo_text ?? '#0f172a' }};">
-                                                {{ strtoupper($account->short_name ?? substr($account->bank_name, 0, 2)) }}
-                                            </div>
-                                            <div>
-                                                <div class="fw-bold text-dark">{{ $account->name }}</div>
-                                                <div class="text-muted small">{{ $account->bank_name }}</div>
-                                            </div>
-                                        </div>
-                                        <span class="status-pill open">{{ $account->status === 'credit' ? 'Crédit' : 'Débit' }}</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <span class="muted-label">Solde</span>
-                                        <span class="fw-bold text-dark">{{ money((float) $account->current_balance) }}</span>
-                                    </div>
-                                </div>
-                            @empty
-                                <div class="alert alert-light border mb-0">Aucun compte bancaire enregistré.</div>
-                            @endforelse
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="row g-4 mb-5">
-                <div class="col-xl-6">
-                    <div class="treasury-panel">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h5>Statistiques par type de transaction</h5>
-                            <span class="badge bg-light text-dark rounded-pill px-3 py-2">Synthèse</span>
-                        </div>
-                        <div class="d-grid gap-3">
-                            @foreach(($typeStats ?? []) as $stat)
-                                <div class="treasury-list-row d-flex justify-content-between align-items-center">
-                                    <span class="fw-semibold text-dark">{{ $stat['label'] }}</span>
-                                    <span class="fw-bold {{ $stat['class'] ?? 'text-dark' }}">{{ $stat['value'] }}</span>
-                                </div>
-                            @endforeach
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-xl-6">
-                    <div class="treasury-panel">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h5>Dernières opérations de caisse</h5>
-                            <span class="badge bg-light text-dark rounded-pill px-3 py-2">5 derniers</span>
-                        </div>
-                        <div class="d-grid gap-3">
-                            @forelse(($recentCashMovements ?? []) as $movement)
-                                <div class="treasury-list-row d-flex justify-content-between align-items-center">
+            <div class="dg-grid-2 mb-6">
+                <x-dg.card title="Caisses actives" icon="bi-cash-stack" color="orange">
+                    <x-slot:actions><span class="dg-badge dg-badge--neutral">{{ ($activeCash ?? collect())->count() }} active(s)</span></x-slot:actions>
+                    <div class="dg-account-grid">
+                        @forelse(($activeCash ?? collect()) as $account)
+                            <div class="dg-account-card {{ $account->account_type === 'mobile_money' ? 'dg-tone-cyan' : 'dg-tone-yellow' }}">
+                                <div class="dg-account-card__head">
                                     <div>
-                                        <div class="fw-semibold text-dark">{{ $movement->label }}</div>
-                                        <small class="text-muted">{{ $movement->cashAccount?->name ?? 'Caisse' }} · {{ $movement->movement_date?->format('d/m/Y') ?? '-' }}</small>
+                                        <div class="dg-account-card__name">{{ $account->name }}</div>
+                                        <div class="dg-account-card__meta">{{ $account->account_type === 'mobile_money' ? 'Mobile money' : 'Caisse' }}</div>
                                     </div>
-                                    <span class="fw-bold {{ $movement->movement_type === 'entry' ? 'text-success' : 'text-danger' }}">
-                                        {{ $movement->movement_type === 'entry' ? '+' : '-' }}{{ money((float) $movement->amount) }}
-                                    </span>
+                                    <span class="dg-tile dg-tile--sm"><i class="bi {{ $account->account_type === 'mobile_money' ? 'bi-phone' : 'bi-cash' }}" aria-hidden="true"></i></span>
                                 </div>
-                            @empty
-                                <div class="alert alert-light border mb-0">Aucune opération récente.</div>
-                            @endforelse
-                        </div>
+                                <div class="dg-account-card__balance">{{ money((float) $account->balance) }}</div>
+                                <div class="mt-2"><span class="dg-badge dg-badge--success">Ouverte</span></div>
+                            </div>
+                        @empty
+                            <div class="dg-empty-state" style="grid-column: 1 / -1; min-height: 120px">Aucune caisse active pour cette entreprise.</div>
+                        @endforelse
                     </div>
-                </div>
-            </div>
+                </x-dg.card>
 
-            <div class="row g-4 mb-5">
-                <div class="col-xl-6">
-                    <div class="treasury-panel">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h5>Derniers réapprovisionnements (transferts)</h5>
-                            <span class="badge bg-light text-dark rounded-pill px-3 py-2">Virements</span>
-                        </div>
-                        <div class="d-grid gap-3">
-                            @forelse(($recentTransfers ?? []) as $transfer)
-                                <div class="treasury-list-row d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <div class="fw-semibold text-dark">{{ $transfer->label }}</div>
-                                        <small class="text-muted">{{ $transfer->transaction_date?->format('d/m/Y') ?? '-' }} · {{ $transfer->bankAccount?->name ?? 'Compte' }}</small>
-                                    </div>
-                                    <span class="fw-bold {{ $transfer->transaction_type === 'credit' ? 'text-success' : 'text-danger' }}">
-                                        {{ $transfer->transaction_type === 'credit' ? '+' : '-' }}{{ money((float) $transfer->amount) }}
-                                    </span>
+                <x-dg.card title="Banques actives" icon="bi-bank" color="indigo">
+                    <x-slot:actions><span class="dg-badge dg-badge--neutral">{{ count($bankAccounts ?? []) }} compte(s)</span></x-slot:actions>
+                    <div class="dg-list">
+                        @forelse(($bankAccounts ?? []) as $account)
+                            <div class="dg-list-row">
+                                <span class="dg-tile dg-tile--sm dg-tone-{{ ['blue', 'green', 'orange', 'purple'][$loop->index % 4] }}"><i class="bi {{ $account->account_type === 'mobile_money' ? 'bi-phone' : 'bi-bank' }}"></i></span>
+                                <div class="dg-list-row__body">
+                                    <div class="dg-list-row__title">{{ $account->name }}</div>
+                                    @if($account->bank_name && strcasecmp($account->bank_name, $account->name) !== 0)
+                                        <div class="dg-list-row__sub">{{ $account->bank_name }}</div>
+                                    @endif
                                 </div>
-                            @empty
-                                <div class="alert alert-light border mb-0">Aucun réapprovisionnement récent.</div>
-                            @endforelse
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-xl-6">
-                    <div class="treasury-panel">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h5>Opérations bancaires récentes</h5>
-                            <span class="badge bg-light text-dark rounded-pill px-3 py-2">5 derniers</span>
-                        </div>
-                        <div class="d-grid gap-3">
-                            @forelse(($recentBankOperations ?? []) as $operation)
-                                <div class="treasury-list-row d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <div class="fw-semibold text-dark">{{ $operation->label }}</div>
-                                        <small class="text-muted">{{ $operation->bankAccount?->name ?? 'Banque' }} · {{ $operation->transaction_date?->format('d/m/Y') ?? '-' }}</small>
-                                    </div>
-                                    <span class="fw-bold {{ $operation->transaction_type === 'credit' ? 'text-success' : 'text-danger' }}">
-                                        {{ $operation->transaction_type === 'credit' ? '+' : '-' }}{{ money((float) $operation->amount) }}
-                                    </span>
-                                </div>
-                            @empty
-                                <div class="alert alert-light border mb-0">Aucune opération bancaire récente.</div>
-                            @endforelse
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="row g-4">
-                <div class="col-xl-8">
-                    <div class="treasury-panel">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h5>Évolution des opérations bancaires</h5>
-                            <span class="badge bg-primary-subtle text-primary rounded-pill px-3 py-2">Derniers 6 mois</span>
-                        </div>
-                        <div class="treasury-chart">
-                            @foreach(($chartData ?? []) as $point)
-                                <div class="column">
-                                    <span class="fw-bold" style="color:#475569; font-size:0.75rem;">{{ number_format((float) $point['value'], 0, ',', ' ') }}</span>
-                                    <span class="bar" style="height: {{ $point['height'] }}%;"></span>
-                                    <small>{{ $point['label'] }}</small>
-                                </div>
-                            @endforeach
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-xl-4">
-                    <div class="treasury-panel">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
-                            <h5>Répartition par type</h5>
-                            <span class="badge bg-light text-dark rounded-pill px-3 py-2">Mix</span>
-                        </div>
-                        <div class="d-flex justify-content-center mb-4">
-                            <div class="donut">
-                                <div class="donut-inner">
-                                    <strong>100%</strong>
-                                    <small>mix</small>
+                                <div class="text-end">
+                                    <div class="dg-list-row__value">{{ money((float) $account->current_balance) }}</div>
+                                    <span class="dg-badge dg-badge--{{ $account->status === 'credit' ? 'success' : 'warning' }} mt-1">{{ $account->status === 'credit' ? 'Crédit' : 'Débit' }}</span>
                                 </div>
                             </div>
-                        </div>
-                        <div>
-                            @foreach(($distribution ?? []) as $item)
-                                <div class="legend-item">
-                                    <div class="legend-left">
-                                        <span class="legend-dot" style="background: {{ $item['color'] }};"></span>
-                                        {{ $item['label'] }}
-                                    </div>
-                                    <div class="fw-bold text-dark">{{ $item['percent'] }}%</div>
-                                </div>
-                            @endforeach
-                        </div>
+                        @empty
+                            <div class="dg-empty-state" style="min-height: 120px">Aucun compte bancaire enregistré.</div>
+                        @endforelse
                     </div>
-                </div>
+                </x-dg.card>
             </div>
+
+            <div class="dg-grid-halves mb-6">
+                <x-dg.card title="Statistiques par type de transaction" icon="bi-bar-chart-steps" color="teal">
+                    <div class="dg-list">
+                        @foreach(($typeStats ?? []) as $stat)
+                            @php
+                                [$statTone, $statIcon, $statClass] = $typeStyles[$stat['label']] ?? ['navy', 'bi-dot', ''];
+                            @endphp
+                            <div class="dg-list-row">
+                                <span class="dg-tile dg-tile--sm dg-tone-{{ $statTone }}"><i class="bi {{ $statIcon }}"></i></span>
+                                <div class="dg-list-row__body"><div class="dg-list-row__title">{{ $stat['label'] }}</div></div>
+                                <div class="dg-list-row__value {{ $statClass }}">{{ $stat['value'] }}</div>
+                            </div>
+                        @endforeach
+                    </div>
+                </x-dg.card>
+
+                <x-dg.card title="Dernières opérations de caisse" icon="bi-cash-coin" color="green">
+                    <x-slot:actions><span class="dg-badge dg-badge--neutral">5 dernières</span></x-slot:actions>
+                    <div class="dg-list">
+                        @forelse(($recentCashMovements ?? []) as $movement)
+                            @php
+                                [$rowTone, $rowIcon, $rowClass, $rowSign] = $flowRow($movement->movement_type === 'entry');
+                            @endphp
+                            <div class="dg-list-row">
+                                <span class="dg-tile dg-tile--sm dg-tone-{{ $rowTone }}"><i class="bi {{ $rowIcon }}"></i></span>
+                                <div class="dg-list-row__body">
+                                    <div class="dg-list-row__title">{{ $movement->label }}</div>
+                                    <div class="dg-list-row__sub">{{ $movement->cashAccount?->name ?? 'Caisse' }} · {{ $movement->movement_date?->format('d/m/Y') ?? '—' }}</div>
+                                </div>
+                                <div class="dg-list-row__value {{ $rowClass }}">{{ $rowSign }}{{ money((float) $movement->amount) }}</div>
+                            </div>
+                        @empty
+                            <div class="dg-empty-state" style="min-height: 120px">Aucune opération de caisse récente.</div>
+                        @endforelse
+                    </div>
+                </x-dg.card>
             </div>
+
+            <div class="dg-grid-halves mb-6">
+                <x-dg.card title="Derniers réapprovisionnements (transferts)" icon="bi-arrow-left-right" color="purple">
+                    <x-slot:actions><span class="dg-badge dg-badge--neutral">Virements</span></x-slot:actions>
+                    <div class="dg-list">
+                        @forelse(($recentTransfers ?? []) as $transfer)
+                            @php
+                                [$rowTone, $rowIcon, $rowClass, $rowSign] = $flowRow($transfer->transaction_type === 'credit');
+                            @endphp
+                            <div class="dg-list-row">
+                                <span class="dg-tile dg-tile--sm dg-tone-{{ $rowTone }}"><i class="bi {{ $rowIcon }}"></i></span>
+                                <div class="dg-list-row__body">
+                                    <div class="dg-list-row__title">{{ $transfer->label }}</div>
+                                    <div class="dg-list-row__sub">{{ $transfer->transaction_date?->format('d/m/Y') ?? '—' }} · {{ $transfer->bankAccount?->name ?? 'Compte' }}</div>
+                                </div>
+                                <div class="dg-list-row__value {{ $rowClass }}">{{ $rowSign }}{{ money((float) $transfer->amount) }}</div>
+                            </div>
+                        @empty
+                            <div class="dg-empty-state" style="min-height: 120px">Aucun réapprovisionnement récent.</div>
+                        @endforelse
+                    </div>
+                </x-dg.card>
+
+                <x-dg.card title="Opérations bancaires récentes" icon="bi-bank" color="blue">
+                    <x-slot:actions><span class="dg-badge dg-badge--neutral">5 dernières</span></x-slot:actions>
+                    <div class="dg-list">
+                        @forelse(($recentBankOperations ?? []) as $operation)
+                            @php
+                                [$rowTone, $rowIcon, $rowClass, $rowSign] = $flowRow($operation->transaction_type === 'credit');
+                            @endphp
+                            <div class="dg-list-row">
+                                <span class="dg-tile dg-tile--sm dg-tone-{{ $rowTone }}"><i class="bi {{ $rowIcon }}"></i></span>
+                                <div class="dg-list-row__body">
+                                    <div class="dg-list-row__title">{{ $operation->label }}</div>
+                                    <div class="dg-list-row__sub">{{ $operation->bankAccount?->name ?? 'Banque' }} · {{ $operation->transaction_date?->format('d/m/Y') ?? '—' }}</div>
+                                </div>
+                                <div class="dg-list-row__value {{ $rowClass }}">{{ $rowSign }}{{ money((float) $operation->amount) }}</div>
+                            </div>
+                        @empty
+                            <div class="dg-empty-state" style="min-height: 120px">Aucune opération bancaire récente.</div>
+                        @endforelse
+                    </div>
+                </x-dg.card>
+            </div>
+
+            <div class="dg-grid-2">
+                <x-dg.card title="Évolution des opérations bancaires (6 derniers mois)" icon="bi-bar-chart-line" color="blue" :meta="'Montants en ' . currency_symbol()">
+                    <div class="dg-chart">
+                        @if($treasuryChartHasData)
+                            <canvas id="treasuryBankChart" role="img" aria-label="Volume des opérations bancaires sur six mois"></canvas>
+                        @else
+                            <div class="dg-chart-empty">
+                                <span class="dg-tile dg-tone-blue"><i class="bi bi-bar-chart-line"></i></span>
+                                <div><strong>Aucune opération bancaire sur 6 mois</strong>Le volume mensuel des opérations bancaires s’affichera ici.</div>
+                            </div>
+                        @endif
+                    </div>
+                </x-dg.card>
+
+                <x-dg.card title="Répartition par type" icon="bi-pie-chart" color="purple">
+                    @if($distributionList->isNotEmpty())
+                        <div class="dg-donut">
+                            <div class="dg-chart"><canvas id="treasuryDistributionChart" role="img" aria-label="Répartition des volumes par type"></canvas></div>
+                            <ul class="dg-legend">
+                                @foreach($distributionList as $item)
+                                    <li title="{{ $item['value'] }}">
+                                        <span class="dg-legend__swatch" style="background:{{ $item['color'] }}"></span>
+                                        <span class="dg-legend__label">{{ $item['label'] }} <span class="text-nowrap">({{ $item['percent'] }}&nbsp;%)</span></span>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @else
+                        <div class="dg-chart">
+                            <div class="dg-chart-empty">
+                                <span class="dg-tile dg-tone-purple"><i class="bi bi-pie-chart"></i></span>
+                                <div><strong>Aucun volume à répartir</strong>Les entrées, sorties et transferts s’afficheront ici.</div>
+                            </div>
+                        </div>
+                    @endif
+                </x-dg.card>
+            </div>
+
+            <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+            <script>
+                (() => {
+                    const compact = new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 });
+                    Chart.defaults.font.family = "'Poppins', system-ui, sans-serif";
+                    Chart.defaults.color = '#8a93a6';
+                    const barCanvas = document.getElementById('treasuryBankChart');
+                    if (barCanvas) {
+                        const points = @json($chartData ?? []);
+                        new Chart(barCanvas, {
+                            type: 'bar',
+                            data: { labels: points.map(point => point.label), datasets: [{ label: 'Opérations bancaires', data: points.map(point => point.value), backgroundColor: '#2563eb', borderRadius: 6, maxBarThickness: 36 }] },
+                            options: {
+                                responsive: true, maintainAspectRatio: false,
+                                plugins: { legend: { display: false }, tooltip: { callbacks: { label: context => window.formatMoney(context.raw) } } },
+                                scales: { x: { grid: { display: false } }, y: { beginAtZero: true, grid: { color: 'rgba(138, 147, 166, .16)' }, border: { display: false }, ticks: { callback: value => compact.format(value) } } }
+                            }
+                        });
+                    }
+                    const donutCanvas = document.getElementById('treasuryDistributionChart');
+                    if (donutCanvas) {
+                        const items = @json($distributionList);
+                        new Chart(donutCanvas, {
+                            type: 'doughnut',
+                            data: { labels: items.map(item => item.label), datasets: [{ data: items.map(item => item.amount), backgroundColor: items.map(item => item.color), borderWidth: 0 }] },
+                            options: { responsive: true, maintainAspectRatio: false, cutout: '68%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: context => context.label + ' : ' + window.formatMoney(context.raw) } } } }
+                        });
+                    }
+                })();
+            </script>
         @elseif(($moduleType ?? '') === 'rapport_financier')
-            <style>
-                .finance-report-shell {
-                    background: #eef3f9;
-                    border: 1px solid #e4eaf2;
-                    border-radius: 18px;
-                    padding: 1.25rem;
-                    width: 100%;
-                    max-width: none;
-                    box-sizing: border-box;
-                    min-width: 0;
-                }
-                .finance-report-shell > * { width: 100%; max-width: none; }
-                .finance-report-shell .finance-chart-panel,
-                .finance-report-shell .finance-kpi-grid,
-                .finance-report-shell .finance-toolbar { max-width: none; }
-                .finance-report-shell .table-responsive { width: 100%; }
-                .finance-toolbar {
-                    display: flex;
-                    align-items: end;
-                    gap: 1rem;
-                    flex-wrap: wrap;
-                    padding: 0.5rem 0 1rem;
-                }
-                .finance-toolbar .field {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0.5rem;
-                    min-width: 180px;
-                }
-                .finance-toolbar .field label {
-                    font-size: 0.8rem;
-                    color: #475569;
-                    font-weight: 600;
-                }
-                .finance-toolbar .field input,
-                .finance-toolbar .field select {
-                    min-height: 42px;
-                    border-radius: 10px;
-                    border: 1px solid #dfe7f4;
-                    background: #fff;
-                    padding: 0.5rem 0.8rem;
-                }
-                .finance-actions {
-                    display: flex;
-                    gap: 0.75rem;
-                    flex-wrap: wrap;
-                    margin-left: auto;
-                }
-                .finance-actions .btn {
-                    min-width: 120px;
-                    border-radius: 10px;
-                    font-weight: 700;
-                }
-                .finance-kpi-grid {
-                    display: grid;
-                    grid-template-columns: repeat(3, minmax(220px, 1fr));
-                    gap: 1rem;
-                    margin: 0.5rem 0 1.5rem;
-                }
-                .finance-kpi {
-                    background: #f8fafc;
-                    border: 1px solid #ebeff5;
-                    border-radius: 16px;
-                    padding: 1.2rem 1.1rem;
-                    display: flex;
-                    align-items: center;
-                    gap: 1rem;
-                    min-height: 120px;
-                }
-                .finance-kpi .icon {
-                    width: 52px;
-                    height: 52px;
-                    border-radius: 16px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 1.5rem;
-                    color: #fff;
-                    background: linear-gradient(135deg, #22c55e, #16a34a);
-                    box-shadow: 0 12px 25px rgba(34,197,94,0.25);
-                }
-                .finance-kpi:nth-child(2) .icon {
-                    background: linear-gradient(135deg, #38bdf8, #2563eb);
-                }
-                .finance-kpi:nth-child(3) .icon {
-                    background: linear-gradient(135deg, #f59e0b, #ef4444);
-                }
-                .finance-kpi .value {
-                    display: block;
-                    font-size: clamp(1.2rem, 2vw, 2.2rem);
-                    font-weight: 800;
-                    color: #0f172a;
-                    letter-spacing: -0.02em;
-                    line-height: 1.1;
-                }
-                .finance-kpi .label {
-                    display: block;
-                    margin-top: 0.3rem;
-                    color: #64748b;
-                    font-size: 0.9rem;
-                    font-weight: 600;
-                }
-                .finance-chart-panel {
-                    background: #ffffff;
-                    border: 1px solid #e5ebf3;
-                    border-radius: 18px;
-                    overflow: hidden;
-                }
-                .finance-chart-header {
-                    background: linear-gradient(180deg, #0f3f71 0%, #0a2e55 100%);
-                    color: #fff;
-                    padding: 1rem 1.2rem;
-                    font-weight: 700;
-                    font-size: 1.1rem;
-                }
-                .finance-chart-body {
-                    background: #f8fafc;
-                    padding: 1.2rem;
-                }
-                .chart-legend {
-                    display: flex;
-                    justify-content: flex-end;
-                    gap: 1rem;
-                    margin-bottom: 1rem;
-                    flex-wrap: wrap;
-                }
-                .legend-chip {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 0.5rem;
-                    color: #475569;
-                    font-size: 0.8rem;
-                    font-weight: 600;
-                }
-                .legend-dot {
-                    width: 14px;
-                    height: 14px;
-                    border-radius: 4px;
-                    display: inline-block;
-                }
-                .finance-bars {
-                    display: flex;
-                    align-items: end;
-                    justify-content: space-between;
-                    gap: 1rem;
-                    height: 270px;
-                    border-left: 1px solid #dfe7f4;
-                    border-bottom: 1px solid #dfe7f4;
-                    padding: 1rem 1rem 0.5rem;
-                    background: linear-gradient(to top, rgba(148,163,184,0.08), rgba(148,163,184,0.02));
-                }
-                .finance-bar-column {
-                    flex: 1;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: end;
-                    gap: 0.75rem;
-                    height: 100%;
-                }
-                .finance-bar-stack {
-                    width: 100%;
-                    max-width: 92px;
-                    height: 100%;
-                    display: flex;
-                    flex-direction: column;
-                    justify-content: end;
-                    padding: 0 0.35rem;
-                }
-                .finance-bar {
-                    width: 100%;
-                    border-radius: 8px 8px 0 0;
-                    min-height: 20px;
-                    box-shadow: inset 0 -10px 18px rgba(0,0,0,0.08);
-                }
-                .finance-bar-total { background: linear-gradient(180deg, #22c55e 0%, #1ea672 100%); }
-                .finance-bar-encaisse { background: linear-gradient(180deg, #38bdf8 0%, #2563eb 100%); }
-                .finance-bar-reste { background: linear-gradient(180deg, #f59e0b 0%, #ef4444 100%); }
-                .finance-bar-label {
-                    color: #64748b;
-                    font-size: 0.75rem;
-                    font-weight: 700;
-                }
-                @media (max-width: 991px) {
-                    .finance-kpi-grid { grid-template-columns: 1fr; }
-                }
-                .finance-report-shell {
-                    background: #f3f6fa;
-                    border: 0;
-                    border-radius: 20px;
-                    padding: 1.5rem;
-                }
-                .finance-report-hero {
-                    position: relative;
-                    overflow: hidden;
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    gap: 1.5rem;
-                    min-height: 150px;
-                    margin-bottom: 1.25rem;
-                    padding: 1.8rem 2rem;
-                    border-radius: 18px;
-                    color: #fff;
-                    background: linear-gradient(118deg, #123e68 0%, #1b628d 58%, #35a98a 100%);
-                    box-shadow: 0 16px 32px rgba(18, 62, 104, .18);
-                }
-                .finance-report-hero::after {
-                    content: "";
-                    position: absolute;
-                    width: 260px;
-                    height: 260px;
-                    right: -75px;
-                    top: -110px;
-                    border: 1px solid rgba(255,255,255,.16);
-                    border-radius: 50%;
-                    box-shadow: 0 0 0 24px rgba(255,255,255,.04), 0 0 0 48px rgba(255,255,255,.03);
-                }
-                .finance-report-hero h2 { position: relative; z-index: 1; margin: 0; font-size: 1.45rem; font-weight: 800; letter-spacing: -.03em; }
-                .finance-report-hero p { position: relative; z-index: 1; margin: .45rem 0 0; color: rgba(255,255,255,.74); font-size: .82rem; }
-                .finance-report-period { position: relative; z-index: 1; padding: .75rem 1rem; border: 1px solid rgba(255,255,255,.22); border-radius: 11px; background: rgba(255,255,255,.1); color: #fff; font-size: .75rem; font-weight: 700; white-space: nowrap; }
-                .finance-toolbar { padding: 1rem; margin-bottom: 1.25rem; border: 1px solid #e5ebf2; border-radius: 14px; background: #fff; box-shadow: 0 7px 20px rgba(31, 55, 80, .045); }
-                .finance-toolbar .field label { color: #8a99ad; font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; }
-                .finance-toolbar .field input { color: #344563; font-weight: 600; }
-                .finance-actions .btn { background: #1b628d; border-color: #1b628d; box-shadow: 0 6px 12px rgba(27,98,141,.18); }
-                .finance-kpi-grid { gap: .85rem; margin-bottom: 1.25rem; }
-                .finance-kpi { position: relative; overflow: hidden; min-height: 112px; border: 1px solid #e7edf4; background: #fff; box-shadow: 0 7px 20px rgba(31,55,80,.045); }
-                .finance-kpi::after { content: ""; position: absolute; right: -25px; bottom: -38px; width: 105px; height: 105px; border-radius: 50%; background: rgba(27,98,141,.035); }
-                .finance-kpi .label { color: #8a99ad; font-size: .76rem; }
-                .finance-chart-panel { border: 1px solid #e5ebf2; border-radius: 16px; box-shadow: 0 7px 20px rgba(31,55,80,.045); }
-                .finance-chart-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; background: #fff; color: #172b4d; border-bottom: 1px solid #edf1f5; font-size: .92rem; }
-                .finance-chart-header::after { content: "•••"; color: #a5b2c2; letter-spacing: .15em; }
-                .finance-chart-body { padding: 1.2rem 1.35rem; background: #fff; }
-                .finance-chart-panel > .table-responsive { background: #fff; padding: 0 .85rem .7rem; }
-                .finance-chart-panel table thead th { padding: .8rem .6rem; color: #8a99ad; border-bottom: 1px solid #e9eef4; font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
-                .finance-chart-panel table tbody td { padding: .85rem .6rem; color: #53657e; border-color: #eff3f7; font-size: .82rem; }
-                .finance-chart-panel table tbody tr:hover { background: #f8fbfd; }
-                .finance-report-shell > form[style] { border: 1px solid #f5dfaa !important; background: #fffaf0 !important; box-shadow: 0 7px 20px rgba(31,55,80,.04); }
-                @media (max-width: 650px) {
-                    .finance-report-shell { padding: .75rem; }
-                    .finance-report-hero { align-items: flex-start; flex-direction: column; padding: 1.35rem; }
-                    .finance-period { width: 100%; }
-                }
-            </style>
+            @php
+                $expenseRows = collect($expenseCategories ?? []);
+                $expenseTotalValue = (float) ($expenseTotal ?? 0);
+                // Part déjà sortie de caisse ou de banque ; les achats fournisseurs peuvent rester à régler.
+                $disbursed = (float) $expenseRows->whereIn('source', ['Caisse', 'Banque'])->sum('amount');
+                $disbursedRate = $expenseTotalValue > 0 ? round($disbursed / $expenseTotalValue * 100) : 0;
+                $hasCommercial = collect($commercialRows ?? [])->isNotEmpty();
+                $hasExpenseMonths = collect($expenseMonths ?? [])->sum('total') > 0;
+                $grossResult = (float) ($totalRealise ?? 0) - $expenseTotalValue;
+                $netCashResult = (float) ($encaisse ?? 0) - $expenseTotalValue;
+            @endphp
 
-            <div class="finance-report-shell">
-                <div class="finance-report-hero">
-                    <div>
-                        <h2>Rapport financier</h2>
-                        <p>Analysez les ventes, les encaissements et les dépenses de votre entreprise.</p>
+            <div class="dg-kpi-grid">
+                @foreach(($summary ?? []) as $item)
+                    <x-dg.kpi :label="$item['label']" :value="$item['value']"
+                        :hint="['factures émises sur la période', 'règlements reçus sur ces factures', 'reste à encaisser'][$loop->index] ?? $item['change']"
+                        :icon="['bi-graph-up-arrow', 'bi-wallet2', 'bi-hourglass-split'][$loop->index] ?? null"
+                        :color="['green', 'blue', 'orange'][$loop->index] ?? 'navy'" />
+                @endforeach
+            </div>
+
+            <div class="dg-grid-halves mb-6">
+                <x-dg.card title="CA par commercial" icon="bi-bar-chart" color="green" :meta="'Montants en ' . currency_symbol()">
+                    <div class="dg-chart">
+                        @if((float) ($totalRealise ?? 0) > 0)
+                            <canvas id="commercialTotalsChart" role="img" aria-label="Chiffre d’affaires, encaissements et créances"></canvas>
+                        @else
+                            <div class="dg-chart-empty">
+                                <span class="dg-tile dg-tone-green"><i class="bi bi-bar-chart"></i></span>
+                                <div><strong>Aucune vente sur la période</strong>Le chiffre d’affaires, les encaissements et les créances s’afficheront ici.</div>
+                            </div>
+                        @endif
                     </div>
-                    <div class="finance-report-period"><i class="bi bi-calendar3 me-2"></i>{{ \Carbon\Carbon::parse($filters['date_debut'])->format('d/m/Y') }} — {{ \Carbon\Carbon::parse($filters['date_fin'])->format('d/m/Y') }}</div>
+                </x-dg.card>
+                <x-dg.card title="Évolution mensuelle par commercial" icon="bi-graph-up" color="blue" :meta="'Montants en ' . currency_symbol()">
+                    <div class="dg-chart">
+                        @if($hasCommercial)
+                            <canvas id="commercialMonthlyChart" role="img" aria-label="Évolution mensuelle des ventes par commercial"></canvas>
+                        @else
+                            <div class="dg-chart-empty">
+                                <span class="dg-tile dg-tone-blue"><i class="bi bi-graph-up"></i></span>
+                                <div><strong>Aucune vente sur la période</strong>L’évolution mois par mois de chaque commercial s’affichera ici.</div>
+                            </div>
+                        @endif
+                    </div>
+                </x-dg.card>
+            </div>
+
+            <x-dg.card title="Détail par utilisateur" icon="bi-people" color="indigo" class="dg-card--table mb-6">
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead><tr><th>#</th><th>Utilisateur</th><th class="text-end">CA factures</th><th class="text-end">CA services</th><th class="text-end">CA total</th><th class="text-end">Encaissé</th><th class="text-end">Reste</th></tr></thead>
+                        <tbody>
+                            @forelse($commercialRows ?? [] as $row)
+                                <tr>
+                                    <td>{{ $loop->iteration }}</td>
+                                    <td class="fw-semibold">{{ $row['user'] }}</td>
+                                    <td class="text-end">{{ money($row['invoices']) }}</td>
+                                    <td class="text-end">{{ money($row['services']) }}</td>
+                                    <td class="text-end dg-cell-num">{{ money($row['total']) }}</td>
+                                    <td class="text-end dg-amount-positive">{{ money($row['paid']) }}</td>
+                                    <td class="text-end {{ $row['remaining'] > 0 ? 'dg-amount-warning' : '' }}">{{ money($row['remaining']) }}</td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="7" class="text-center text-muted py-6">Aucune vente sur cette période.</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
                 </div>
-                <form method="GET" action="{{ route('admin.comptabilite.rapport_financier') }}" class="finance-toolbar">
-                    <div class="field">
-                        <label>Date début</label>
-                        <input type="date" name="date_debut" value="{{ $filters['date_debut'] ?? now()->startOfYear()->toDateString() }}" />
-                    </div>
-                    <div class="field">
-                        <label>Date fin</label>
-                        <input type="date" name="date_fin" value="{{ $filters['date_fin'] ?? now()->endOfYear()->toDateString() }}" />
-                    </div>
-                    <div class="finance-actions">
-                        <button type="submit" class="btn btn-primary">Filtrer</button>
-                    </div>
-                </form>
+            </x-dg.card>
 
-                <div class="finance-kpi-grid">
-                    @foreach(($summary ?? []) as $item)
-                        <div class="finance-kpi">
-                            <div class="icon">
-                                <i class="bi {{ $loop->index === 0 ? 'bi-graph-up-arrow' : ($loop->index === 1 ? 'bi-wallet2' : 'bi-credit-card') }}"></i>
-                            </div>
-                            <div>
-                                <span class="value">{{ $item['value'] }}</span>
-                                <span class="label">{{ $item['change'] }}</span>
-                            </div>
+            <x-dg.card title="Dépenses globales" icon="bi-truck" color="red" class="mb-6">
+                <div class="dg-kpi-grid">
+                    <x-dg.kpi label="Total dépenses" :value="money($expenseTotalValue)" icon="bi-receipt" color="red" hint="caisse, banque et fournisseurs" />
+                    <x-dg.kpi label="Déjà décaissé" :value="money($disbursed)" icon="bi-cash" color="purple" :hint="$disbursedRate . ' % des dépenses (caisse et banque)'" />
+                </div>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead><tr><th>Source</th><th>Catégorie</th><th class="text-end">Montant total</th></tr></thead>
+                        <tbody>
+                            @forelse($expenseRows as $row)
+                                <tr>
+                                    <td><span class="dg-badge dg-badge--{{ ['Caisse' => 'warning', 'Banque' => 'neutral', 'Fournisseurs' => 'danger'][$row['source']] ?? 'neutral' }}">{{ $row['source'] }}</span></td>
+                                    <td>{{ $row['category'] }}</td>
+                                    <td class="text-end dg-cell-num">{{ money($row['amount']) }}</td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="3" class="text-center text-muted py-6">Aucune dépense sur cette période.</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </x-dg.card>
+
+            <x-dg.card title="Évolution mensuelle des dépenses" icon="bi-activity" color="orange" :meta="'Montants en ' . currency_symbol()" class="mb-6">
+                <div class="dg-chart mb-4">
+                    @if($hasExpenseMonths)
+                        <canvas id="expenseMonthlyChart" role="img" aria-label="Évolution mensuelle des dépenses"></canvas>
+                    @else
+                        <div class="dg-chart-empty">
+                            <span class="dg-tile dg-tone-orange"><i class="bi bi-activity"></i></span>
+                            <div><strong>Aucune dépense sur la période</strong>Les sorties de caisse, dépenses bancaires et achats fournisseurs s’afficheront ici.</div>
                         </div>
-                    @endforeach
+                    @endif
                 </div>
-
-                <div class="finance-chart-panel">
-                    <div class="finance-chart-header">CA par commercial</div>
-                    <div class="finance-chart-body">
-                        <div class="chart-legend">
-                            @foreach(($commercialSeries ?? []) as $series)
-                                <span class="legend-chip"><span class="legend-dot" style="background: {{ $series['color'] }};"></span>{{ $series['label'] }}</span>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead><tr><th>Mois</th><th class="text-end">Sorties de caisse</th><th class="text-end">Dépenses banque (débit)</th><th class="text-end">Achats fournisseurs</th><th class="text-end">Dépenses totales</th></tr></thead>
+                        <tbody>
+                            @foreach($expenseMonths ?? [] as $row)
+                                <tr>
+                                    <td>{{ ucfirst($row['label']) }}</td>
+                                    <td class="text-end">{{ money($row['cash']) }}</td>
+                                    <td class="text-end">{{ money($row['bank']) }}</td>
+                                    <td class="text-end">{{ money($row['suppliers']) }}</td>
+                                    <td class="text-end dg-cell-num">{{ money($row['total']) }}</td>
+                                </tr>
                             @endforeach
-                        </div>
-                        <canvas id="commercialTotalsChart" height="150"></canvas>
-                    </div>
+                        </tbody>
+                    </table>
                 </div>
-                <div class="finance-chart-panel mt-5">
-                        <div class="finance-chart-header">Évolution mensuelle par commercial</div>
-                        <div class="finance-chart-body"><canvas id="commercialMonthlyChart" height="115"></canvas></div>
-                    </div>
-                <div class="finance-chart-panel mt-5">
-                    <div class="finance-chart-header">Détail par utilisateur</div>
-                    <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>#</th><th>Utilisateur</th><th>CA Factures</th><th>CA Services</th><th>CA Total</th><th>Encaissé</th><th>Reste</th></tr></thead><tbody>
-                    @forelse($commercialRows ?? [] as $row)<tr><td>{{ $loop->iteration }}</td><td class="fw-bold">{{ $row['user'] }}</td><td>{{ money($row['invoices']) }}</td><td>{{ money($row['services']) }}</td><td class="fw-bold">{{ money($row['total']) }}</td><td>{{ money($row['paid']) }}</td><td>{{ money($row['remaining']) }}</td></tr>@empty<tr><td colspan="7" class="text-center text-muted">Aucune vente sur cette période.</td></tr>@endforelse
-                    </tbody></table></div>
-                </div>
-                <div class="finance-chart-panel mt-5">
-                    <div class="finance-chart-header">Dépenses globales</div>
-                    <div class="finance-kpi-grid p-4 mb-0">
-                        <div class="finance-kpi"><div class="icon"><i class="bi bi-truck"></i></div><div><span class="value">{{ money($expenseTotal ?? 0) }}</span><span class="label">Total dépenses<br><small>Caisse + Banque + Fournisseurs</small></span></div></div>
-                        <div class="finance-kpi"><div class="icon" style="background:linear-gradient(135deg,#f59e0b,#e58b12)"><i class="bi bi-cash"></i></div><div><span class="value">{{ money($expenseTotal ?? 0) }}</span><span class="label">Déjà payé / décaissé<br><small>Taux : 100%</small></span></div></div>
-                    </div>
-                    <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Source</th><th>Catégorie</th><th>Montant total</th></tr></thead><tbody>
-                    @forelse($expenseCategories ?? [] as $row)<tr><td>{{ $row['source'] }}</td><td>{{ $row['category'] }}</td><td class="fw-bold">{{ money($row['amount']) }}</td></tr>@empty<tr><td colspan="3" class="text-center text-muted">Aucune dépense sur cette période.</td></tr>@endforelse
-                    </tbody></table></div>
-                </div>
-                <div class="finance-chart-panel mt-5">
-                    <div class="finance-chart-header">Évolution mensuelle des dépenses</div>
-                    <div class="finance-chart-body"><canvas id="expenseMonthlyChart" height="120"></canvas></div>
-                    <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Mois</th><th>Sorties de caisse</th><th>Dépenses banque (Débit)</th><th>Achats fournisseurs</th><th>Dépenses totales</th></tr></thead><tbody>
-                    @foreach($expenseMonths ?? [] as $row)<tr><td>{{ $row['label'] }}</td><td>{{ money($row['cash']) }}</td><td>{{ money($row['bank']) }}</td><td>{{ money($row['suppliers']) }}</td><td class="fw-bold">{{ money($row['total']) }}</td></tr>@endforeach
-                    </tbody></table></div>
-                </div>
-                <form method="POST" action="{{ route('admin.comptabilite.rapport_financier.observations') }}" class="mt-5 p-4" style="background:#fff9e8;border-left:4px solid #f59e0b;border-radius:10px;">
+            </x-dg.card>
+
+            <x-dg.card title="Observations du rapport" icon="bi-chat-left-text" color="yellow" class="mb-6">
+                <form method="POST" action="{{ route('admin.comptabilite.rapport_financier.observations') }}">
                     @csrf
                     <input type="hidden" name="date_debut" value="{{ $filters['date_debut'] }}">
                     <input type="hidden" name="date_fin" value="{{ $filters['date_fin'] }}">
-                    <label class="fw-bold mb-2">Observation générale :</label>
-                    <textarea name="general_observation" class="form-control mb-4" rows="2" placeholder="Saisir une observation générale sur la période">{{ $observations['general'] ?? '' }}</textarea>
-                    <label class="fw-bold mb-2">Observations sur les dépenses :</label>
-                    <textarea name="expense_observation" class="form-control mb-3" rows="3" placeholder="Renseigner les observations de rapport, anomalies, écarts ou commentaires sur les dépenses">{{ $observations['expenses'] ?? '' }}</textarea>
-                    <button class="btn btn-warning text-white">Enregistrer</button>
+                    <div class="mb-4">
+                        <label class="form-label" for="generalObservation">Observation générale</label>
+                        <textarea id="generalObservation" name="general_observation" class="form-control" rows="2" placeholder="Saisir une observation générale sur la période">{{ $observations['general'] ?? '' }}</textarea>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label" for="expenseObservation">Observations sur les dépenses</label>
+                        <textarea id="expenseObservation" name="expense_observation" class="form-control" rows="3" placeholder="Renseigner les observations de rapport, anomalies, écarts ou commentaires sur les dépenses">{{ $observations['expenses'] ?? '' }}</textarea>
+                    </div>
+                    <button class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Enregistrer</button>
                 </form>
-                <div class="finance-kpi-grid mt-5">
-                    <div class="finance-kpi"><div class="icon" style="background:linear-gradient(135deg,#38a1d6,#2480b5)"><i class="bi bi-bar-chart-line"></i></div><div><span class="value">{{ money($totalRealise - $expenseTotal) }}</span><span class="label">Résultat brut<br><small>Bénéfice généré(e) sur la période</small></span></div></div>
-                    <div class="finance-kpi"><div class="icon" style="background:linear-gradient(135deg,#a855c7,#7e3aa0)"><i class="bi bi-wallet2"></i></div><div><span class="value">{{ money($encaisse - $expenseTotal) }}</span><span class="label">Résultat net encaissé<br><small>Trésorerie positive sur la période</small></span></div></div>
-                </div>
-                <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-                <script>
-                    (() => {
-                        const labels = @json(collect($chartData ?? [])->pluck('label')->values());
-                        const money = value => window.formatMoney(value);
-                        const series = @json($commercialSeries ?? []);
-                        new Chart(document.getElementById('commercialTotalsChart'), {type:'bar', data:{labels:series.map(item=>item.label),datasets:[{label:'Montant ({{ currency_symbol() }})',data:series.map(item=>item.value),backgroundColor:['#3ecf8e','#44b3ff','#e76f51']}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:value=>money(value)}}}}});
-                        const commercial = @json($commercialMonthly ?? []);
-                        new Chart(document.getElementById('commercialMonthlyChart'), {type:'line',data:{labels:labels,datasets:commercial.map((item,index)=>({label:item.label,data:item.values,borderColor:['#08a85b','#08b9e8','#7c3aed','#f59e0b'][index%4],backgroundColor:'transparent',tension:.35,pointRadius:4}))},options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{ticks:{callback:value=>money(value)}}}}});
-                        const expenses = @json($expenseMonths ?? []);
-                        new Chart(document.getElementById('expenseMonthlyChart'), {type:'line',data:{labels:expenses.map(item=>item.label),datasets:[{label:'Sorties de caisse',data:expenses.map(item=>item.cash),borderColor:'#ff5348',tension:.35},{label:'Dépenses banque (Débit)',data:expenses.map(item=>item.bank),borderColor:'#8054d8',tension:.35},{label:'Achats fournisseurs',data:expenses.map(item=>item.suppliers),borderColor:'#20ad8b',tension:.35},{label:'Dépenses totales',data:expenses.map(item=>item.total),borderColor:'#25384d',borderDash:[5,5],tension:.35}]},options:{responsive:true,plugins:{legend:{position:'top'}},scales:{y:{ticks:{callback:value=>money(value)}}}}});
-                    })();
-                </script>
+            </x-dg.card>
+
+            <h2 class="dg-section-title">Résultats de la période</h2>
+            <div class="dg-kpi-grid mb-0">
+                <x-dg.kpi label="Résultat brut" :value="money($grossResult)" icon="bi-bar-chart-line" color="teal" hint="chiffre d’affaires réalisé moins les dépenses" />
+                <x-dg.kpi label="Résultat net encaissé" :value="money($netCashResult)" icon="bi-wallet2" color="indigo" hint="montants encaissés moins les dépenses" />
             </div>
+
+            <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+            <script>
+                (() => {
+                    const compact = new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 });
+                    const moneyTooltip = context => (context.dataset.label ? context.dataset.label + ' : ' : '') + window.formatMoney(context.raw);
+                    const moneyAxis = { beginAtZero: true, grid: { color: 'rgba(138, 147, 166, .16)' }, border: { display: false }, ticks: { callback: value => compact.format(value) } };
+                    Chart.defaults.font.family = "'Poppins', system-ui, sans-serif";
+                    Chart.defaults.color = '#8a93a6';
+                    const palette = ['#2563eb', '#10b981', '#8b5cf6', '#f97316', '#06b6d4', '#db2777'];
+
+                    const totalsCanvas = document.getElementById('commercialTotalsChart');
+                    if (totalsCanvas) {
+                        const series = @json($commercialSeries ?? []);
+                        new Chart(totalsCanvas, {
+                            type: 'bar',
+                            data: { labels: series.map(item => item.label), datasets: [{ data: series.map(item => item.value), backgroundColor: ['#10b981', '#2563eb', '#f97316'], borderRadius: 8, maxBarThickness: 64 }] },
+                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: moneyTooltip } } }, scales: { x: { grid: { display: false } }, y: moneyAxis } }
+                        });
+                    }
+
+                    const monthlyCanvas = document.getElementById('commercialMonthlyChart');
+                    if (monthlyCanvas) {
+                        const labels = @json(collect($chartData ?? [])->pluck('label')->map(fn ($label) => ucfirst($label))->values());
+                        const commercial = @json($commercialMonthly ?? []);
+                        new Chart(monthlyCanvas, {
+                            type: 'line',
+                            data: { labels, datasets: commercial.map((item, index) => ({ label: item.label, data: item.values, borderColor: palette[index % palette.length], backgroundColor: palette[index % palette.length], borderWidth: 3, tension: .35, pointRadius: 3 })) },
+                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } }, tooltip: { callbacks: { label: moneyTooltip } } }, scales: { x: { grid: { display: false } }, y: moneyAxis } }
+                        });
+                    }
+
+                    const expenseCanvas = document.getElementById('expenseMonthlyChart');
+                    if (expenseCanvas) {
+                        const expenses = @json($expenseMonths ?? []);
+                        const line = (label, key, color, dashed) => ({ label, data: expenses.map(item => item[key]), borderColor: color, backgroundColor: color, borderWidth: dashed ? 2 : 3, borderDash: dashed ? [6, 5] : [], tension: .35, pointRadius: 3 });
+                        new Chart(expenseCanvas, {
+                            type: 'line',
+                            data: {
+                                labels: expenses.map(item => item.label.charAt(0).toUpperCase() + item.label.slice(1)),
+                                datasets: [line('Sorties de caisse', 'cash', '#ef4444'), line('Dépenses banque', 'bank', '#8b5cf6'), line('Achats fournisseurs', 'suppliers', '#0d9488'), line('Dépenses totales', 'total', '#273772', true)]
+                            },
+                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } }, tooltip: { callbacks: { label: moneyTooltip } } }, scales: { x: { grid: { display: false } }, y: moneyAxis } }
+                        });
+                    }
+                })();
+            </script>
         @elseif($isTreasury)
             <div class="dg-card dg-card--table mt-6">
                 <div class="dg-card__header">

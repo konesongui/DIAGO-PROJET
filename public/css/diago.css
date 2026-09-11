@@ -167,6 +167,8 @@
 .dg-btn--outline:hover { border-color: var(--dg-navy); color: var(--dg-navy); }
 
 .dg-btn--block { width: 100%; }
+.dg-btn--outline.dg-btn--danger { color: var(--dg-danger); }
+.dg-btn--outline.dg-btn--danger:hover { border-color: var(--dg-danger); color: var(--dg-danger); background: var(--dg-danger-bg); }
 .dg-btn--sm { min-height: 34px; padding: 0 14px; font-size: 13px; }
 
 .dg-icon-btn {
@@ -488,6 +490,21 @@
     color: var(--dg-navy);
 }
 
+/* ---------- Encadré d'information (état à confirmer, alerte) ---------- */
+.dg-callout {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 20px;
+    border: 1px solid var(--dg-border);
+    border-left: 4px solid var(--dg-tone, var(--dg-navy));
+    border-radius: var(--dg-radius-lg);
+    background: var(--dg-surface);
+    box-shadow: var(--dg-shadow);
+    font-family: var(--dg-font);
+}
+
 /* ---------- Fenêtres modales ---------- */
 .dg-modal .modal-content { overflow: hidden; border: 0; border-radius: var(--dg-radius-lg); font-family: var(--dg-font); color: var(--dg-text); }
 .dg-modal .modal-header { padding: 18px 24px; border-bottom: 0; background: var(--dg-tone, var(--dg-navy)) !important; }
@@ -589,6 +606,16 @@
 .dg-period { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .dg-period .dg-input { width: auto; min-height: 42px; padding: 8px 12px; font-size: 14px; }
 .dg-period__sep { font-size: 14px; color: var(--dg-muted); }
+
+/* ---------- Liste d'éléments (opérations récentes, comptes) ---------- */
+.dg-list { display: flex; flex-direction: column; }
+.dg-list-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--dg-border); }
+.dg-list-row:first-child { padding-top: 0; }
+.dg-list-row:last-child { padding-bottom: 0; border-bottom: 0; }
+.dg-list-row__body { flex: 1; min-width: 0; }
+.dg-list-row__title { overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; color: var(--dg-text); }
+.dg-list-row__sub { margin-top: 1px; font-size: 12.5px; color: var(--dg-muted); }
+.dg-list-row__value { font-size: 14px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--dg-text); }
 
 /* ---------- Mini-tableau (listes clé / valeur) ---------- */
 .dg-mini-table { width: 100%; font-size: 14px; border-collapse: collapse; }
@@ -1087,8 +1114,12 @@ body.dg-app { font-family: var(--dg-font); }
     text-transform: uppercase;
     color: var(--dg-muted) !important;
 }
+.dg-scope .table > tfoot > tr > td { padding: 12px 16px !important; }
 .dg-scope .table > tbody > tr > td { padding: 14px 16px !important; border-bottom: 1px solid var(--dg-border) !important; color: var(--dg-text); font-size: 14px; }
 .dg-scope .table .dg-cell-num { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dg-scope .table > tbody > tr > td.dg-amount-positive { color: var(--dg-success); }
+.dg-scope .table > tbody > tr > td.dg-amount-negative { color: var(--dg-danger); }
+.dg-scope .table > tbody > tr > td.dg-amount-warning { color: var(--dg-warning); }
 .dg-scope .table-striped > tbody > tr:nth-of-type(odd) > * { --bs-table-accent-bg: transparent; --bs-table-bg-type: transparent; box-shadow: none; }
 .dg-scope .table-hover > tbody > tr:hover > * { --bs-table-accent-bg: var(--dg-row-hover); --bs-table-bg-type: var(--dg-row-hover); background-color: var(--dg-row-hover); }
 .dg-scope .dataTables_wrapper { font-family: var(--dg-font); font-size: 14px; color: var(--dg-muted); }

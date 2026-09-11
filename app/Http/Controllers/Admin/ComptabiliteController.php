@@ -950,6 +950,7 @@ class ComptabiliteController extends AdminController
             ->get();
 
         $recentTransfers = BankTransaction::where('entreprise_id', $entrepriseId)
+            ->with('bankAccount')
             ->where('is_transfer', true)
             ->orderByDesc('transaction_date')
             ->orderByDesc('id')
@@ -971,71 +972,49 @@ class ComptabiliteController extends AdminController
             ['label' => 'Solde réel', 'value' => number_format((float) $liquidityTotal, 0, ',', ' ') . ' FCFA', 'class' => 'text-dark'],
         ]);
 
-        $baseChart = [
-            ['label' => 'Jan', 'value' => 150000],
-            ['label' => 'Fév', 'value' => 210000],
-            ['label' => 'Mar', 'value' => 250000],
-            ['label' => 'Avr', 'value' => 310000],
-            ['label' => 'Mai', 'value' => 360000],
-            ['label' => 'Juin', 'value' => 420000],
-        ];
+        // Volume des opérations bancaires des six derniers mois, mois en cours inclus.
+        // Un mois sans opération vaut zéro : aucune valeur n'est inventée.
+        $chartStart = now()->startOfMonth()->subMonths(5);
         $bankTransactions = BankTransaction::where('entreprise_id', $entrepriseId)
-        ->where('is_transfer', false)
-        ->whereNotNull('transaction_date')
-            ->orderBy('transaction_date')
-            ->get();
+            ->where('is_transfer', false)
+            ->whereDate('transaction_date', '>=', $chartStart->toDateString())
+            ->get(['transaction_date', 'amount']);
 
-        $maxChartValue = collect($baseChart)->max('value');
-
-        $chartData = collect($baseChart)->map(function ($point, $index) use ($bankTransactions, $maxChartValue) {
-            $monthNumber = $index + 1;
-            $value = $bankTransactions->filter(function ($transaction) use ($monthNumber) {
-                $date = $transaction->transaction_date;
-                if (! $date) {
-                    return false;
-                }
-
-                return (int) $date->format('n') === $monthNumber;
-            })->sum('amount');
-
-            $value = $value > 0 ? (float) $value : (float) $point['value'];
+        $chartData = collect(range(0, 5))->map(function ($offset) use ($chartStart, $bankTransactions) {
+            $month = $chartStart->copy()->addMonths($offset);
 
             return [
-                'label' => $point['label'],
-                'value' => $value,
-                'height' => $maxChartValue > 0 ? min(100, max(18, round(($value / $maxChartValue) * 100))) : 30,
+                'label' => ucfirst($month->translatedFormat('M Y')),
+                'value' => (float) $bankTransactions->filter(fn ($transaction) => $transaction->transaction_date?->isSameMonth($month))->sum('amount'),
             ];
         })->values();
 
+        // Répartition des volumes réels ; les types sans montant sont omis.
         $distribution = collect([
-            ['label' => 'Entrées', 'value' => max((float) $creditTransactions, 1), 'color' => '#2563eb'],
-            ['label' => 'Sorties', 'value' => max((float) $debitTransactions, 1), 'color' => '#ef4444'],
-            ['label' => 'Transferts', 'value' => max($transferVolume, 1), 'color' => '#22c55e'],
-            ['label' => 'Autres', 'value' => max(150000, 1), 'color' => '#f59e0b'],
-        ]);
+            ['label' => 'Entrées', 'value' => (float) $creditTransactions, 'color' => '#059669'],
+            ['label' => 'Sorties', 'value' => (float) $debitTransactions, 'color' => '#dc2626'],
+            ['label' => 'Transferts', 'value' => $transferVolume, 'color' => '#7c3aed'],
+        ])->filter(fn ($item) => $item['value'] > 0);
         $distributionTotal = $distribution->sum('value');
-        $distribution = $distribution->map(function ($item) use ($distributionTotal) {
-            $percent = $distributionTotal > 0 ? round(($item['value'] / $distributionTotal) * 100) : 0;
-
-            return [
-                'label' => $item['label'],
-                'percent' => $percent,
-                'value' => number_format((float) $item['value'], 0, ',', ' ') . ' FCFA',
-                'color' => $item['color'],
-            ];
-        })->values();
+        $distribution = $distribution->map(fn ($item) => [
+            'label' => $item['label'],
+            'amount' => $item['value'],
+            'percent' => $distributionTotal > 0 ? round(($item['value'] / $distributionTotal) * 100) : 0,
+            'value' => number_format((float) $item['value'], 0, ',', ' ') . ' FCFA',
+            'color' => $item['color'],
+        ])->values();
 
         $activeCash = $cashAccounts->filter(fn ($account) => (bool) $account->is_active)->values();
 
         return $this->page('comptabilite-module', [
-            'title' => 'État trésorerie',
+            'title' => 'État de trésorerie',
             'subtitle' => 'Synthèse de la trésorerie, des caisses et des comptes bancaires',
             'moduleType' => 'rapports',
             'summary' => [
-                ['label' => 'Liquidité totale', 'value' => number_format($liquidityTotal, 0, ',', ' ') . ' FCFA', 'change' => '+4,8% vs période précédente'],
+                ['label' => 'Liquidité totale', 'value' => number_format($liquidityTotal, 0, ',', ' ') . ' FCFA', 'change' => 'caisses et banques'],
                 ['label' => 'Total caisse', 'value' => number_format($cashTotal, 0, ',', ' ') . ' FCFA', 'change' => $activeCash->count() . ' caisse(s) active(s)'],
                 ['label' => 'Total banque', 'value' => number_format($bankTotal, 0, ',', ' ') . ' FCFA', 'change' => $bankAccounts->count() . ' compte(s) actif(s)'],
-                ['label' => 'Réapprovisionnements', 'value' => number_format($transferVolume, 0, ',', ' ') . ' FCFA', 'change' => 'moyenne mensuelle'],
+                ['label' => 'Réapprovisionnements', 'value' => number_format($transferVolume, 0, ',', ' ') . ' FCFA', 'change' => 'volume total des transferts'],
             ],
             'cashAccounts' => $cashAccounts,
             'bankAccounts' => $bankAccounts,
@@ -1412,11 +1391,13 @@ class ComptabiliteController extends AdminController
             }
 
             $assets = $query->get()->map(function (FixedAsset $asset) {
-                $elapsedMonths = max(0, $asset->acquisition_date?->diffInMonths(now()) ?? 0);
+                // diffInMonths est absolu : une acquisition future ne doit pas être amortie.
+                $elapsedMonths = $asset->acquisition_date?->isPast() ? $asset->acquisition_date->diffInMonths(now()) : 0;
                 $usefulLifeMonths = max(1, $asset->useful_life_years * 12);
                 $depreciableValue = max(0, (float) $asset->acquisition_value - (float) $asset->residual_value);
                 $depreciation = min($depreciableValue, $depreciableValue * min($elapsedMonths, $usefulLifeMonths) / $usefulLifeMonths);
                 $asset->depreciation_amount = $depreciation;
+                $asset->depreciation_rate = $depreciableValue > 0 ? $depreciation / $depreciableValue * 100 : 0;
                 $asset->net_value = max((float) $asset->residual_value, (float) $asset->acquisition_value - $depreciation);
                 return $asset;
             });
@@ -1493,8 +1474,8 @@ class ComptabiliteController extends AdminController
                 }
 
                 return $this->page('supplier-invoices', [
-                    'title' => 'Import facture fournisseur',
-                    'subtitle' => 'Chargez une facture PDF, extrayez ses informations et consultez son détail',
+                    'title' => 'Factures fournisseurs',
+                    'subtitle' => 'Import des factures PDF, contrôle des données extraites et suivi des achats.',
                     'invoices' => $query->get(),
                     'filters' => $request->only('search'),
                 ]);
