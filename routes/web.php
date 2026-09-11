@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\DepartmentController;
 use App\Http\Controllers\Admin\DesignationController;
 use App\Http\Controllers\Admin\EmployeeController;
 use App\Http\Controllers\Admin\EntrepriseController;
+use App\Http\Controllers\Admin\GlobalSearchController;
 use App\Http\Controllers\Admin\HubController;
 use App\Http\Controllers\Admin\AdministrationController;
 use App\Http\Controllers\Admin\RhController;
@@ -77,6 +78,7 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::get('/admin/dashboard', [AdminDashboardController::class, 'index']);
         Route::get('/hub', [HubController::class, 'index'])->name('admin.hub');
         Route::view('/design-system', 'admin.design-system', ['title' => 'Design System'])->name('admin.design-system');
+        Route::get('/recherche', GlobalSearchController::class)->name('admin.search');
         Route::get('/administration', [AdministrationController::class, 'index'])->name('admin.administration');
         Route::get('/administration/{module}', [AdministrationController::class, 'module'])->name('admin.administration.module');
         Route::post('/administration/{module}', [AdministrationController::class, 'store'])->name('admin.administration.store');

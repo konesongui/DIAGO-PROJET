@@ -1,19 +1,13 @@
 @extends('admin.layout')
 
 @section('content')
-<div class="card border-0 shadow-sm">
-    <div class="card-body p-6">
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-6">
-            <div>
-                <div class="text-uppercase text-muted fs-8 fw-bold ls-1">Comptabilité</div>
-                <h3 class="fs-2 fw-bold text-dark mb-1">{{ $title }}</h3>
-                <p class="text-muted mb-0">{{ $subtitle }}</p>
-            </div>
-            <div class="d-flex gap-2">
-                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#transferModal"><i class="bi bi-arrow-left-right me-2"></i>Nouveau transfert</button>
-                <a href="{{ route('admin.comptabilite') }}" class="btn btn-light">Retour</a>
-            </div>
-        </div>
+<div class="dg-font dg-scope">
+    <div>
+        <x-dg.page-header :title="$title" :subtitle="$subtitle" :back="route('admin.comptabilite')" back-label="Comptabilité">
+            <x-slot:actions>
+                <button type="button" class="dg-btn dg-btn--primary" data-bs-toggle="modal" data-bs-target="#transferModal"><i class="bi bi-arrow-left-right"></i>Nouveau transfert</button>
+            </x-slot:actions>
+        </x-dg.page-header>
 
         @if(session('success'))
             <div class="alert alert-success">{{ session('success') }}</div>
@@ -78,33 +72,38 @@
             </div>
         </div>
 
-        <form method="GET" class="d-flex gap-3 align-items-end flex-wrap mb-4">
-            <div><label class="form-label">Du</label><input type="date" name="date_debut" class="form-control" value="{{ $filters['date_debut'] }}"></div>
-            <div><label class="form-label">Au</label><input type="date" name="date_fin" class="form-control" value="{{ $filters['date_fin'] }}"></div>
-            <button class="btn btn-light-primary">Filtrer</button>
-            <a href="{{ route('admin.comptabilite.transfers') }}" class="btn btn-light">Réinitialiser</a>
-        </form>
-
-        <div class="table-responsive">
-            <table class="table align-middle table-row-dashed">
-                <thead><tr class="text-muted text-uppercase fs-7">
-                    <th>Source</th><th>Destination</th><th>Montant</th><th>Date</th><th>Référence</th><th>Description</th>
-                </tr></thead>
-                <tbody>
-                @forelse($transfers as $transfer)
-                    <tr>
-                        <td><strong>{{ $transfer['source'] }}</strong><br><span class="badge badge-light-primary">{{ $transfer['source_type'] }}</span></td>
-                        <td><strong>{{ $transfer['destination'] }}</strong><br><span class="badge badge-light-success">{{ $transfer['destination_type'] }}</span></td>
-                        <td class="fw-bold text-primary">{{ $transfer['amount'] }}</td>
-                        <td>{{ $transfer['date'] }}</td>
-                        <td>{{ $transfer['reference'] }}</td>
-                        <td>{{ $transfer['description'] ?: '-' }}</td>
-                    </tr>
-                @empty
-                    <tr><td colspan="6" class="text-center text-muted py-8">Aucun transfert enregistré.</td></tr>
-                @endforelse
-                </tbody>
-            </table>
+        <div class="dg-card dg-card--table">
+            <div class="dg-card__header flex-wrap">
+                <h2 class="dg-card__title"><span class="dg-tile dg-tile--sm dg-tone-purple"><i class="bi bi-arrow-left-right"></i></span>Historique des transferts</h2>
+                <form method="GET" class="dg-period" aria-label="Filtrer par période">
+                    <input type="date" name="date_debut" class="dg-input" value="{{ $filters['date_debut'] }}" aria-label="Du">
+                    <span class="dg-period__sep">au</span>
+                    <input type="date" name="date_fin" class="dg-input" value="{{ $filters['date_fin'] }}" aria-label="Au">
+                    <button class="dg-btn dg-btn--outline"><i class="bi bi-funnel"></i>Filtrer</button>
+                    <a href="{{ route('admin.comptabilite.transfers') }}" class="dg-btn dg-btn--outline" title="Réinitialiser" aria-label="Réinitialiser"><i class="bi bi-arrow-counterclockwise"></i></a>
+                </form>
+            </div>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead><tr>
+                        <th>Source</th><th>Destination</th><th>Montant</th><th>Date</th><th>Référence</th><th>Description</th>
+                    </tr></thead>
+                    <tbody>
+                    @forelse($transfers as $transfer)
+                        <tr>
+                            <td><span class="fw-semibold">{{ $transfer['source'] }}</span><br><span class="dg-badge dg-badge--neutral mt-1">{{ $transfer['source_type'] }}</span></td>
+                            <td><span class="fw-semibold">{{ $transfer['destination'] }}</span><br><span class="dg-badge dg-badge--success mt-1">{{ $transfer['destination_type'] }}</span></td>
+                            <td class="dg-cell-num">{{ $transfer['amount'] }}</td>
+                            <td>{{ $transfer['date'] }}</td>
+                            <td>{{ $transfer['reference'] }}</td>
+                            <td>{{ $transfer['description'] ?: '-' }}</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="6" class="text-center text-muted py-8">Aucun transfert enregistré.</td></tr>
+                    @endforelse
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
@@ -140,7 +139,8 @@
     document.getElementById('source_id').addEventListener('change', updateSourceBalance);
     refreshTransferAccounts();
     @if($errors->any())
-        new bootstrap.Modal(document.getElementById('transferModal')).show();
+        // Bootstrap est chargé en fin de layout : on rouvre la fenêtre une fois la page prête.
+        window.addEventListener('load', () => new bootstrap.Modal(document.getElementById('transferModal')).show());
     @endif
 </script>
 @endsection

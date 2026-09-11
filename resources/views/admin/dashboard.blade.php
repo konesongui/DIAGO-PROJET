@@ -21,8 +21,11 @@
         !empty($rubriques['rh']) && $user->hasPermission('hr', 'edit') ? ['admin.rh.employees.create', 'bi-person-plus', __('New employee')] : null,
     ]));
 
+    // État vide des graphiques : pastille, titre et explication.
+    $emptyChart = fn (string $tone, string $icon, string $title, string $text) => '<div class="dg-chart-empty"><span class="dg-tile dg-tone-' . $tone . '"><i class="bi ' . $icon . '"></i></span><div><strong>' . e($title) . '</strong>' . e($text) . '</div></div>';
+
     // Palette des graphiques : charte Diago puis déclinaisons.
-    $chartColors = ['#273772', '#fadf2f', '#dfe3ec', '#6272b0', '#c9ad12', '#a3acc2'];
+    $chartColors = ['#273772', '#fadf2f', '#2563eb', '#10b981', '#8b5cf6', '#f97316'];
 @endphp
 
 <div class="dg-font">
@@ -51,17 +54,17 @@
 
     {{-- Indicateurs de tête (maquette, page 2) --}}
     <div class="dg-kpi-grid">
-        <x-dg.kpi :label="__('Receipts')" :value="$money($overview['revenue'])" icon="bi-graph-up-arrow"
+        <x-dg.kpi :label="__('Receipts')" :value="$money($overview['revenue'])" icon="bi-graph-up-arrow" color="green"
             :trend="$percent($overview['revenue_trend'])"
             :trend-direction="($overview['revenue_trend'] ?? 0) >= 0 ? 'up' : 'down'"
             :trend-tone="($overview['revenue_trend'] ?? 0) >= 0 ? 'success' : 'danger'"
             :hint="$overview['comparison']" />
-        <x-dg.kpi :label="__('Expenses')" :value="$money($overview['expenses'])" icon="bi-receipt"
+        <x-dg.kpi :label="__('Expenses')" :value="$money($overview['expenses'])" icon="bi-receipt" color="orange"
             :trend="$percent($overview['expenses_trend'])"
             :trend-direction="($overview['expenses_trend'] ?? 0) >= 0 ? 'up' : 'down'"
             :trend-tone="($overview['expenses_trend'] ?? 0) > 0 ? 'danger' : 'success'"
             :hint="$overview['comparison']" />
-        <x-dg.kpi :label="__('Net balance')" :value="$money($overview['net'])" icon="bi-coin"
+        <x-dg.kpi :label="__('Net balance')" :value="$money($overview['net'])" icon="bi-coin" color="blue"
             :trend="$percent($overview['net_trend'])"
             :trend-direction="($overview['net_trend'] ?? 0) >= 0 ? 'up' : 'down'"
             :trend-tone="($overview['net_trend'] ?? 0) >= 0 ? 'success' : 'danger'"
@@ -74,11 +77,17 @@
     </div>
 
     <div class="dg-grid-2">
-        <x-dg.card :title="__('Receipts trend') . ' (' . $revenueTrend['range'] . ')'" :meta="$currencyLabel">
-            <div class="dg-chart"><canvas id="revenueTrendChart" aria-label="{{ __('Receipts trend') }}" role="img"></canvas></div>
+        <x-dg.card :title="__('Receipts trend') . ' (' . $revenueTrend['range'] . ')'" icon="bi-graph-up-arrow" color="green" :meta="$currencyLabel">
+            <div class="dg-chart">
+                @if(array_sum($revenueTrend['values']) > 0)
+                    <canvas id="revenueTrendChart" aria-label="{{ __('Receipts trend') }}" role="img"></canvas>
+                @else
+                    {!! $emptyChart('green', 'bi-graph-up-arrow', 'Aucune recette cette année', 'Les encaissements de caisse et de banque s’afficheront ici.') !!}
+                @endif
+            </div>
         </x-dg.card>
 
-        <x-dg.card :title="__('Expense breakdown')">
+        <x-dg.card :title="__('Expense breakdown')" icon="bi-pie-chart" color="orange">
             @if($expenseBreakdown->isNotEmpty())
                 <div class="dg-donut">
                     <div class="dg-chart"><canvas id="expenseBreakdownChart" aria-label="{{ __('Expense breakdown') }}" role="img"></canvas></div>
@@ -92,7 +101,7 @@
                     </ul>
                 </div>
             @else
-                <div class="dg-empty-state">{{ __('No expenses recorded during this period.') }}</div>
+                <div class="dg-chart">{!! $emptyChart('orange', 'bi-pie-chart', __('No expenses recorded during this period.'), 'La répartition par catégorie s’affichera ici.') !!}</div>
             @endif
         </x-dg.card>
     </div>
@@ -100,56 +109,68 @@
     {{-- Trésorerie et comptabilité --}}
     <h2 class="dg-section-title dg-section-title--spaced">{{ __('Treasury') }}</h2>
     <div class="dg-kpi-grid">
-        <x-dg.kpi :label="__('Current balance')" :value="$money($treasury['balance'])" icon="bi-bank" />
-        <x-dg.kpi :label="__('Cash outflows')" :value="$money($treasury['cash_exits'])" icon="bi-cash" />
-        <x-dg.kpi :label="__('Transactions')" :value="$treasury['transactions']" icon="bi-arrow-left-right" :hint="__('during the period')" />
+        <x-dg.kpi :label="__('Current balance')" :value="$money($treasury['balance'])" icon="bi-bank" color="indigo" />
+        <x-dg.kpi :label="__('Cash outflows')" :value="$money($treasury['cash_exits'])" icon="bi-cash" color="pink" />
+        <x-dg.kpi :label="__('Transactions')" :value="$treasury['transactions']" icon="bi-arrow-left-right" color="cyan" :hint="__('during the period')" />
     </div>
-    <x-dg.card :title="__('Revenue vs expenses')" :meta="$currencyLabel">
-        <div class="dg-chart"><canvas id="revenueExpenseChart" aria-label="{{ __('Revenue vs expenses') }}" role="img"></canvas></div>
+    <x-dg.card :title="__('Revenue vs expenses')" icon="bi-bar-chart-line" color="teal" :meta="$currencyLabel">
+        <div class="dg-chart">
+            @if(array_sum($accounting['revenue_series']) + array_sum($accounting['expense_series']) > 0)
+                <canvas id="revenueExpenseChart" aria-label="{{ __('Revenue vs expenses') }}" role="img"></canvas>
+            @else
+                {!! $emptyChart('teal', 'bi-bar-chart-line', 'Aucun mouvement sur la période', 'Les recettes et les dépenses de chaque mois s’afficheront ici.') !!}
+            @endif
+        </div>
     </x-dg.card>
 
     {{-- Commercial --}}
     <h2 class="dg-section-title dg-section-title--spaced">{{ __('Commercial') }}</h2>
     <div class="dg-kpi-grid">
-        <x-dg.kpi label="Ventes facturées" :value="$money($commercial['sales'])" icon="bi-bag" />
-        <x-dg.kpi label="Factures émises" :value="$commercial['invoices']" icon="bi-file-earmark-text" />
-        <x-dg.kpi label="Achats fournisseurs" :value="$money($commercial['purchases'])" icon="bi-truck" />
-        <x-dg.kpi label="Factures fournisseurs reçues" :value="$commercial['supplier_invoices']" icon="bi-inbox" />
+        <x-dg.kpi label="Ventes facturées" :value="$money($commercial['sales'])" icon="bi-bag" color="blue" />
+        <x-dg.kpi label="Factures émises" :value="$commercial['invoices']" icon="bi-file-earmark-text" color="purple" />
+        <x-dg.kpi label="Achats fournisseurs" :value="$money($commercial['purchases'])" icon="bi-truck" color="teal" />
+        <x-dg.kpi label="Factures fournisseurs reçues" :value="$commercial['supplier_invoices']" icon="bi-inbox" color="orange" />
     </div>
 
     {{-- Ressources humaines --}}
     <h2 class="dg-section-title dg-section-title--spaced">{{ __('Human resources') }}</h2>
     <div class="dg-kpi-grid">
-        <x-dg.kpi label="Effectif total" :value="$hr['count']" icon="bi-people" />
-        <x-dg.kpi label="Âge médian" :value="$hr['median_age'] . ' ans'" icon="bi-person" />
-        <x-dg.kpi label="Ancienneté moyenne" :value="number_format($hr['seniority'], 1, ',', ' ') . ' ans'" icon="bi-hourglass-split" />
-        <x-dg.kpi label="Salaire net moyen" :value="$money($hr['net_average'])" icon="bi-wallet2" />
+        <x-dg.kpi label="Effectif total" :value="$hr['count']" icon="bi-people" color="indigo" />
+        <x-dg.kpi label="Âge médian" :value="$hr['median_age'] . ' ans'" icon="bi-person" color="cyan" />
+        <x-dg.kpi label="Ancienneté moyenne" :value="number_format($hr['seniority'], 1, ',', ' ') . ' ans'" icon="bi-hourglass-split" color="purple" />
+        <x-dg.kpi label="Salaire net moyen" :value="$money($hr['net_average'])" icon="bi-wallet2" color="green" />
     </div>
 
     @php
         $hrCharts = [
-            ['ageChart', 'Pyramide des âges (effectifs par tranche)', $hr['age_bands']->keys()->values(), $hr['age_bands']->values(), 'bar', false],
-            ['turnoverChart', 'Sorties mensuelles', $hr['turnover']->sortKeys()->keys()->map($monthName)->values(), $hr['turnover']->sortKeys()->values(), 'bar', false],
-            ['salaryChart', 'Évolution du salaire net moyen', $hr['salary']->sortKeys()->keys()->map($yearMonthName)->values(), $hr['salary']->sortKeys()->values(), 'line', true],
-            ['leaveChart', 'Congés, absences et arrêts par mois', $hr['leave']->sortKeys()->keys()->map($monthName)->values(), $hr['leave']->sortKeys()->values(), 'bar', false],
+            ['ageChart', 'Pyramide des âges (effectifs par tranche)', $hr['age_bands']->keys()->values(), $hr['age_bands']->values(), 'bar', false, '#8b5cf6', 'purple', 'bi-people'],
+            ['turnoverChart', 'Sorties mensuelles', $hr['turnover']->sortKeys()->keys()->map($monthName)->values(), $hr['turnover']->sortKeys()->values(), 'bar', false, '#ef4444', 'red', 'bi-box-arrow-right'],
+            ['salaryChart', 'Évolution du salaire net moyen', $hr['salary']->sortKeys()->keys()->map($yearMonthName)->values(), $hr['salary']->sortKeys()->values(), 'line', true, '#10b981', 'green', 'bi-cash-coin'],
+            ['leaveChart', 'Congés, absences et arrêts par mois', $hr['leave']->sortKeys()->keys()->map($monthName)->values(), $hr['leave']->sortKeys()->values(), 'bar', false, '#06b6d4', 'cyan', 'bi-calendar-range'],
         ];
         $hrTables = [
-            ['Contrats', $hr['contracts'], false],
-            ['Nationalités', $hr['nationalities'], false],
-            ['Catégories professionnelles', $hr['categories'], false],
-            ['Salaire net moyen par service', $hr['departments'], true],
+            ['Contrats', $hr['contracts'], false, 'bi-file-earmark-text', 'blue'],
+            ['Nationalités', $hr['nationalities'], false, 'bi-globe', 'green'],
+            ['Catégories professionnelles', $hr['categories'], false, 'bi-diagram-3', 'purple'],
+            ['Salaire net moyen par service', $hr['departments'], true, 'bi-cash-coin', 'orange'],
         ];
     @endphp
     <div class="dg-grid-halves mb-5">
-        @foreach($hrCharts as [$id, $chartTitle])
-            <x-dg.card :title="$chartTitle">
-                <div class="dg-chart dg-chart--sm"><canvas id="{{ $id }}" aria-label="{{ $chartTitle }}" role="img"></canvas></div>
+        @foreach($hrCharts as [$id, $chartTitle, $chartLabels, $chartValues, $chartType, $chartMoney, $chartHex, $chartTone, $chartIcon])
+            <x-dg.card :title="$chartTitle" :icon="$chartIcon" :color="$chartTone">
+                <div class="dg-chart dg-chart--sm">
+                    @if(collect($chartValues)->sum() > 0)
+                        <canvas id="{{ $id }}" aria-label="{{ $chartTitle }}" role="img"></canvas>
+                    @else
+                        {!! $emptyChart($chartTone, $chartIcon, 'Aucune donnée', 'Les données du personnel s’afficheront ici.') !!}
+                    @endif
+                </div>
             </x-dg.card>
         @endforeach
     </div>
     <div class="dg-grid-4">
-        @foreach($hrTables as [$tableTitle, $rows, $isMoney])
-            <x-dg.card :title="$tableTitle">
+        @foreach($hrTables as [$tableTitle, $rows, $isMoney, $tableIcon, $tableColor])
+            <x-dg.card :title="$tableTitle" :icon="$tableIcon" :color="$tableColor">
                 <table class="dg-mini-table">
                     <tbody>
                         @forelse($rows as $label => $value)
@@ -176,9 +197,10 @@
     Chart.defaults.color = muted;
 
     // Évolution des recettes : aire marine, dernier point jaune (maquette).
+    const trendCanvas = document.getElementById('revenueTrendChart');
     const trendValues = @json($revenueTrend['values']);
     const lastIndex = trendValues.length - 1;
-    new Chart(document.getElementById('revenueTrendChart'), {
+    if (trendCanvas) new Chart(trendCanvas, {
         type: 'line',
         data: {
             labels: @json($revenueTrend['labels']),
@@ -227,13 +249,14 @@
         });
     }
 
-    new Chart(document.getElementById('revenueExpenseChart'), {
+    const revenueExpenseCanvas = document.getElementById('revenueExpenseChart');
+    if (revenueExpenseCanvas) new Chart(revenueExpenseCanvas, {
         type: 'line',
         data: {
             labels: @json($monthLabels),
             datasets: [
-                { label: @json(__('Receipts')), data: @json($accounting['revenue_series']), borderColor: navy, backgroundColor: navy, borderWidth: 3, tension: .4, pointRadius: 3 },
-                { label: @json(__('Expenses')), data: @json($accounting['expense_series']), borderColor: '#c9ad12', backgroundColor: '#c9ad12', borderWidth: 3, tension: .4, pointRadius: 3 }
+                { label: @json(__('Receipts')), data: @json($accounting['revenue_series']), borderColor: '#10b981', backgroundColor: '#10b981', borderWidth: 3, tension: .4, pointRadius: 3 },
+                { label: @json(__('Expenses')), data: @json($accounting['expense_series']), borderColor: '#f59e0b', backgroundColor: '#f59e0b', borderWidth: 3, tension: .4, pointRadius: 3 }
             ]
         },
         options: {
@@ -247,15 +270,17 @@
         }
     });
 
-    @json($hrCharts).forEach(([id, , labels, values, type, isMoney]) => {
-        new Chart(document.getElementById(id), {
+    @json($hrCharts).forEach(([id, , labels, values, type, isMoney, color]) => {
+        const canvas = document.getElementById(id);
+        if (!canvas) return;
+        new Chart(canvas, {
             type,
             data: {
                 labels,
                 datasets: [{
                     data: values,
-                    borderColor: navy,
-                    backgroundColor: type === 'bar' ? navy : 'rgba(39, 55, 114, .08)',
+                    borderColor: color,
+                    backgroundColor: type === 'bar' ? color : color + '1f',
                     borderRadius: type === 'bar' ? 6 : 0,
                     maxBarThickness: 36,
                     fill: type === 'line',

@@ -36,6 +36,19 @@
         </x-dg.card>
     </div>
 
+    <h2 class="dg-section-title">Couleurs d'accent</h2>
+    <x-dg.card class="mb-6">
+        <p class="dg-card__text">Chaque indicateur reçoit sa couleur (attribut <code>color</code> du composant, ou classe <code>dg-tone-*</code>) : vert pour les entrées, rouge pour les sorties, orange pour les alertes, puis bleu, violet, indigo, cyan, sarcelle, rose pour distinguer les autres.</p>
+        <div class="d-flex flex-wrap gap-4">
+            @foreach(['navy' => 'Marine', 'blue' => 'Bleu', 'green' => 'Vert', 'purple' => 'Violet', 'orange' => 'Orange', 'red' => 'Rouge', 'teal' => 'Sarcelle', 'cyan' => 'Cyan', 'pink' => 'Rose', 'indigo' => 'Indigo', 'yellow' => 'Jaune'] as $tone => $toneLabel)
+                <div class="d-flex align-items-center gap-2 dg-tone-{{ $tone }}">
+                    <span class="dg-tile"><i class="bi bi-circle-fill"></i></span>
+                    <span>{{ $toneLabel }} <code class="dg-muted">{{ $tone }}</code></span>
+                </div>
+            @endforeach
+        </div>
+    </x-dg.card>
+
     <h2 class="dg-section-title">Boutons</h2>
     <x-dg.card class="mb-6">
         <div class="d-flex flex-wrap align-items-center gap-3">
@@ -51,16 +64,16 @@
 
     <h2 class="dg-section-title">Indicateurs</h2>
     <div class="dg-kpi-grid">
-        <x-dg.kpi label="Chiffre d'affaires" value="25 480 000 FCFA" icon="bi-graph-up-arrow" trend="+12,5%" hint="vs mois dernier" />
-        <x-dg.kpi label="Dépenses" value="8 240 000 FCFA" icon="bi-receipt" trend="+4,8%" trend-tone="danger" hint="vs mois dernier" />
-        <x-dg.kpi label="Bénéfice net" value="17 240 000 FCFA" icon="bi-coin" trend="+15,2%" hint="marge 67,6 %" />
+        <x-dg.kpi label="Chiffre d'affaires" value="25 480 000 FCFA" icon="bi-graph-up-arrow" color="green" trend="+12,5%" hint="vs mois dernier" />
+        <x-dg.kpi label="Dépenses" value="8 240 000 FCFA" icon="bi-receipt" color="orange" trend="+4,8%" trend-tone="danger" hint="vs mois dernier" />
+        <x-dg.kpi label="Bénéfice net" value="17 240 000 FCFA" icon="bi-coin" color="blue" trend="+15,2%" hint="marge 67,6 %" />
         <x-dg.kpi label="Factures impayées" value="2 350 000 FCFA" icon="bi-exclamation-triangle-fill" tone="danger" trend="-8,4%" trend-direction="down" trend-tone="success" hint="recouvrement" />
     </div>
     <div class="dg-kpi-grid mb-6">
         <x-dg.kpi label="NSIA Banque CI" value="18 400 000 FCFA" icon="bi-bank" accent="navy" hint="CI092 01001 0039281" />
         <x-dg.kpi label="Banque Atlantique" value="12 150 000 FCFA" icon="bi-bank" accent="success" hint="CI034 02005 0019284" />
         <x-dg.kpi label="Caisse principale" value="820 000 FCFA" icon="bi-cash" accent="yellow" hint="Espèces / Plateau" />
-        <x-dg.kpi label="Flux net (mois)" value="+9 820 000 FCFA" icon="bi-graph-up" trend="Entrées positives" />
+        <x-dg.kpi label="Flux net (mois)" value="+9 820 000 FCFA" icon="bi-graph-up" color="purple" trend="Entrées positives" />
     </div>
 
     <h2 class="dg-section-title">Filtres et onglets</h2>

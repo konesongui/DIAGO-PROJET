@@ -1,6 +1,35 @@
 @extends('admin.layout')
 
+@php
+    // Caisses et banques suivent la charte (refonte 4b) ; les rapports gardent l'ancienne présentation jusqu'à leur refonte.
+    $isTreasury = in_array($moduleType ?? '', ['caisses', 'banques'], true);
+@endphp
+
+@if($isTreasury)
+    @section('topbar')
+        @php
+            $treasuryBalance = $moduleType === 'caisses' ? ($summary[3] ?? null) : ($summary[1] ?? null);
+        @endphp
+        @if($treasuryBalance)
+            <p class="dg-topbar__title">{{ $moduleType === 'caisses' ? 'Solde réel des caisses' : 'Solde total des banques' }} : <span class="dg-amount-positive text-nowrap">{{ $treasuryBalance['value'] }}</span></p>
+        @endif
+    @endsection
+@endif
+
 @section('content')
+<div class="{{ $isTreasury ? 'dg-font dg-scope' : '' }}">
+@if($isTreasury)
+    <x-dg.page-header :title="$title" :subtitle="$subtitle" :back="route('admin.comptabilite')" back-label="Comptabilité">
+        @if($moduleType === 'caisses')
+            <x-slot:actions>
+                <button type="button" class="dg-btn dg-btn--outline" data-bs-toggle="modal" data-bs-target="#createCashAccountModal"><i class="bi bi-plus-lg"></i>Nouvelle caisse</button>
+                <button type="button" class="dg-btn dg-btn--primary" data-bs-toggle="modal" data-bs-target="#createCashMovementModal"><i class="bi bi-plus-lg"></i>Nouveau mouvement</button>
+            </x-slot:actions>
+        @endif
+    </x-dg.page-header>
+<div>
+    <div>
+@else
 <div class="card border-0 shadow-sm mb-6">
     <div class="card-body p-6">
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-4 mb-6">
@@ -11,20 +40,18 @@
             </div>
             <div class="d-flex gap-2">
                 <a href="{{ route('admin.comptabilite') }}" class="btn btn-light btn-sm px-4">Retour</a>
-                @if(($moduleType ?? '') === 'caisses')
-                    <button type="button" class="btn btn-light btn-sm px-4" data-bs-toggle="modal" data-bs-target="#createCashAccountModal">Nouvelle caisse</button>
-                    <button type="button" class="btn btn-primary btn-sm px-4" data-bs-toggle="modal" data-bs-target="#createCashMovementModal">Nouveau mouvement</button>
-                @endif
             </div>
         </div>
+@endif
 
         @if(($moduleType ?? '') === 'banques')
             <style>
                 .bank-filter-bar {
-                    background: #f5f8ff;
-                    border: 1px solid #e8edf7;
-                    border-radius: 14px;
-                    padding: 12px 16px;
+                    background: #ffffff;
+                    border: 1px solid #e3e7ef;
+                    border-radius: 16px;
+                    padding: 14px 16px;
+                    margin-bottom: 24px;
                 }
                 .bank-card {
                     border: 1px solid #edf2f7;
@@ -57,8 +84,8 @@
                     gap: 10px;
                     flex-wrap: nowrap;
                     padding: 12px 14px;
-                    background: #f8faff;
-                    border: 1px solid #edf2f7;
+                    background: #f7f8fb;
+                    border: 1px solid #e3e7ef;
                     border-radius: 12px;
                 }
                 .bank-details-toolbar .toolbar-filters,
@@ -95,8 +122,8 @@
                     gap: 12px;
                 }
                 .bank-summary-item {
-                    background: #f8fbff;
-                    border: 1px solid #eaf0f8;
+                    background: #f7f8fb;
+                    border: 1px solid #e3e7ef;
                     border-radius: 14px;
                     padding: 14px 16px;
                 }
@@ -172,79 +199,54 @@
                     </div>
                     <div class="d-flex flex-row align-items-center justify-content-end gap-2 ms-auto flex-wrap">
                         <a href="{{ route('admin.comptabilite.banques') }}" class="btn btn-light btn-sm px-4">Réinitialiser</a>
-                        <button type="submit" class="btn btn-primary btn-sm px-4">Filtrer</button>
-                        <button type="button" class="btn btn-primary btn-sm px-4" data-bs-toggle="modal" data-bs-target="#createBankAccountModal"><i class="bi bi-plus-lg me-2"></i>Nouvelle Banque</button>
+                        <button type="submit" class="btn btn-light btn-sm px-4"><i class="bi bi-funnel me-1"></i>Filtrer</button>
+                        <button type="button" class="btn btn-primary btn-sm px-4" data-bs-toggle="modal" data-bs-target="#createBankAccountModal"><i class="bi bi-plus-lg me-2"></i>Nouvelle banque</button>
                     </div>
                 </div>
             </form>
 
-            <div class="row g-4 mb-6">
+            <div class="dg-kpi-grid">
                 @foreach(($summary ?? []) as $item)
-                    <div class="col-xl-3 col-md-6">
-                        <div class="card border-0 shadow-sm h-100">
-                            <div class="card-body p-4">
-                                <div class="text-muted fs-7 fw-bold text-uppercase">{{ $item['label'] }}</div>
-                                <div class="mt-3 fs-2 fw-bold text-dark">{{ $item['value'] }}</div>
-                                <div class="mt-2 fs-7 fw-bold text-primary">{{ $item['change'] }}</div>
-                            </div>
-                        </div>
-                    </div>
+                    <x-dg.kpi :label="$item['label']" :value="$item['value']" :hint="$item['change']"
+                        :icon="['bi-bank', 'bi-wallet2', 'bi-box-arrow-in-down', 'bi-box-arrow-up'][$loop->index] ?? null"
+                        :color="['indigo', 'blue', 'green', 'red'][$loop->index] ?? 'navy'" />
                 @endforeach
             </div>
 
-            <div class="row g-4">
+            @php
+                $accountTones = ['blue', 'green', 'orange', 'purple'];
+            @endphp
+            <div class="dg-account-grid">
                 @forelse(($bankAccounts ?? []) as $index => $bank)
-                    <div class="col-xl-3 col-md-6">
-                        <div class="bank-card p-4">
-                            <div class="d-flex justify-content-between align-items-center mb-4">
-                                <div class="d-flex align-items-center gap-3">
-                                    <div class="bank-logo" style="background: {{ $bank['logo_bg'] ?? '#3B82F6' }}; color: {{ $bank['logo_text'] ?? '#fff' }};">{{ strtoupper(substr($bank['short_name'] ?? 'BC', 0, 2)) }}</div>
-                                    <div>
-                                        <div class="fw-bold text-dark fs-6 mb-0">{{ $bank['name'] }}</div>
-                                        <small class="text-muted">{{ $bank['bank'] }}</small>
-                                    </div>
-                                </div>
-                                <span class="badge {{ ($bank['status'] ?? 'credit') === 'credit' ? 'badge-light-success' : 'badge-light-warning' }} px-3 py-2">
-                                    {{ ($bank['status'] ?? 'credit') === 'credit' ? 'Crédit' : 'Débit' }}
-                                </span>
+                    @php
+                        $isUp = ($bank['movement_direction'] ?? 'up') === 'up';
+                    @endphp
+                    <div class="dg-account-card dg-tone-{{ ($bank['account_type'] ?? '') === 'mobile_money' ? 'cyan' : $accountTones[$loop->index % 4] }}">
+                        <div class="dg-account-card__head">
+                            <div>
+                                <div class="dg-account-card__name">{{ $bank['name'] }}</div>
+                                @if(($bank['bank'] ?? '') !== '' && strcasecmp($bank['bank'], $bank['name']) !== 0)
+                                    <div class="dg-account-card__meta">{{ $bank['bank'] }}</div>
+                                @endif
                             </div>
+                            <span class="dg-tile dg-tile--sm"><i class="bi {{ ($bank['account_type'] ?? '') === 'mobile_money' ? 'bi-phone' : 'bi-bank' }}" aria-hidden="true"></i></span>
+                        </div>
+                        <div class="dg-account-card__balance">{{ money((float) ($bank['amount'] ?? 0)) }}</div>
+                        <div class="dg-account-card__number">{{ $bank['account_number'] }}</div>
+                        <dl class="dg-account-card__lines">
+                            <div><dt>Statut</dt><dd><span class="dg-badge dg-badge--{{ ($bank['status'] ?? 'credit') === 'credit' ? 'success' : 'warning' }}">{{ ($bank['status'] ?? 'credit') === 'credit' ? 'Crédit' : 'Débit' }}</span></dd></div>
+                            <div><dt>Ouverture période</dt><dd>{{ money((float) ($bank['period_initial_balance'] ?? 0)) }}</dd></div>
+                            <div><dt>{{ $bank['movement_label'] ?? 'Solde initial' }}</dt><dd class="{{ $isUp ? 'dg-amount-positive' : 'dg-amount-negative' }}">{{ $isUp ? '+' : '-' }}{{ money((float) ($bank['movement_amount'] ?? 0)) }}</dd></div>
+                        </dl>
 
-                            <div class="text-muted fs-7 text-uppercase mb-1">Compte</div>
-                            <div class="fw-bold text-dark fs-5 mb-3">{{ $bank['account_number'] }}</div>
-
-                            <div class="bank-separator"></div>
-
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="text-muted fs-7">Solde période</span>
-                                <span class="fw-bold fs-5 text-dark">{{ money((float) ($bank['amount'] ?? 0)) }}</span>
-                            </div>
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <span class="text-muted fs-7">Ouverture période</span>
-                                <span class="fw-bold fs-7 text-dark">{{ money((float) ($bank['period_initial_balance'] ?? 0)) }}</span>
-                            </div>
-
-                            <div class="d-flex justify-content-between align-items-center mb-4">
-                                <span class="text-muted fs-7">Dernier mouvement</span>
-                                <span class="fs-7 fw-bold {{ ($bank['movement_direction'] ?? 'up') === 'up' ? 'text-success' : 'text-danger' }}">
-                                    {{ $bank['movement_label'] ?? 'Solde initial' }}
-                                </span>
-                            </div>
-
-                            <div class="d-flex justify-content-between align-items-center bg-light rounded-3 px-3 py-2 mb-4">
-                                <span class="text-muted fs-7">Mouvement</span>
-                                <span class="fw-bold {{ ($bank['movement_direction'] ?? 'up') === 'up' ? 'text-success' : 'text-danger' }}">
-                                    {{ (($bank['movement_direction'] ?? 'up') === 'up' ? '+' : '-') }}{{ money((float) ($bank['movement_amount'] ?? 0)) }}
-                                </span>
-                            </div>
-
-                            <div class="d-flex gap-2 flex-wrap">
-                                <button type="button" class="btn btn-sm btn-light-primary flex-fill bank-transaction-trigger"
+                        <div class="dg-account-card__actions">
+                                <button type="button" class="dg-btn dg-btn--outline dg-btn--sm bank-transaction-trigger"
                                         data-account-id="{{ $bank['id'] ?? $index }}"
                                         data-account-name="{{ $bank['name'] }}"
                                         data-account-bank="{{ $bank['bank'] }}"
                                         data-bs-toggle="modal"
-                                        data-bs-target="#transactionBankModal">Transaction</button>
-                                <button type="button" class="btn btn-sm btn-light flex-fill bank-details-trigger"
+                                        data-bs-target="#transactionBankModal"><i class="bi bi-plus-lg"></i>Transaction</button>
+                                <button type="button" class="dg-btn dg-btn--outline dg-btn--sm bank-details-trigger"
                                         data-account-id="{{ $bank['id'] ?? $index }}"
                                         data-account-name="{{ $bank['name'] }}"
                                         data-account-bank="{{ $bank['bank'] }}"
@@ -258,10 +260,7 @@
                                         data-transactions='@json($bank['transactions'] ?? [])'
                                         data-bs-toggle="modal"
                                         data-bs-target="#detailsBankModal">Détails</button>
-                            </div>
-
-                            <div class="d-flex gap-2 mt-3">
-                                <button type="button" class="btn btn-sm btn-light bank-edit-trigger"
+                                <button type="button" class="dg-icon-btn dg-icon-btn--sm bank-edit-trigger" title="Modifier" aria-label="Modifier {{ $bank['name'] }}"
                                         data-account-id="{{ $bank['id'] ?? $index }}"
                                         data-account-name="{{ $bank['name'] }}"
                                         data-account-bank="{{ $bank['bank'] }}"
@@ -270,13 +269,12 @@
                                         data-account-status="{{ $bank['status'] ?? 'credit' }}"
                                         data-account-short="{{ $bank['short_name'] ?? 'BC' }}"
                                         data-bs-toggle="modal"
-                                        data-bs-target="#editBankAccountModal-{{ $bank['id'] ?? $index }}">Modifier</button>
-                                <form method="POST" action="{{ route('admin.comptabilite.banques.destroy', $bank['id'] ?? $index) }}" class="d-inline" onsubmit="return confirm('Supprimer ce compte bancaire ?');">
+                                        data-bs-target="#editBankAccountModal-{{ $bank['id'] ?? $index }}"><i class="bi bi-pencil-square"></i></button>
+                                <form method="POST" action="{{ route('admin.comptabilite.banques.destroy', $bank['id'] ?? $index) }}" onsubmit="return confirm('Supprimer ce compte bancaire ?');">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">Supprimer</button>
+                                    <button type="submit" class="dg-icon-btn dg-icon-btn--sm dg-icon-btn--danger" title="Supprimer" aria-label="Supprimer {{ $bank['name'] }}"><i class="bi bi-trash"></i></button>
                                 </form>
-                            </div>
                         </div>
                     </div>
 
@@ -334,19 +332,7 @@
                         </div>
                     </div>
                 @empty
-                    <div class="col-12">
-                        <style>
-                            .cash-movement-table { width: 100%; table-layout: auto; }
-                            .cash-movement-table th,
-                            .cash-movement-table td { padding: .8rem .7rem; vertical-align: middle; }
-                            .cash-movement-table th { white-space: nowrap; }
-                        </style>
-                        <div class="card border-0 shadow-sm">
-                            <div class="card-body text-center py-8">
-                                <div class="text-muted fs-5">Aucun compte bancaire trouvé pour ce filtre.</div>
-                            </div>
-                        </div>
-                    </div>
+                    <div class="dg-card dg-empty-state" style="grid-column: 1 / -1">Aucun compte bancaire trouvé pour ce filtre.</div>
                 @endforelse
             </div>
 
@@ -936,72 +922,61 @@
         @endif
 
         @if(($moduleType ?? '') === 'caisses')
-            <div class="mb-6">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-header border-0 bg-white px-4 py-3">
-                        <button class="btn w-100 text-start d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#cashStateCollapse" aria-expanded="false" aria-controls="cashStateCollapse">
-                            <span>
-                                <span class="text-uppercase text-muted fs-8 fw-bold ls-1 d-block">ÉTAT GÉNÉRAL DES CAISSES</span>
-                                <span class="fs-6 fw-bold text-dark">Suivi consolidé des caisses / comptes mobile money</span>
-                            </span>
-                            <span class="badge badge-light-primary fs-7 fw-bold px-3 py-2">{{ count($accounts ?? []) }} comptes actifs</span>
-                        </button>
-                    </div>
-                    <div id="cashStateCollapse" class="collapse">
-                        <div class="card-body border-top">
-                            <div class="row g-4">
-        @if(($moduleType ?? '') === 'caisses' && !empty($accounts))
-            <div class="row g-4 mb-6">
-                        <div class="row g-4 mb-6">
-            @foreach(($summary ?? []) as $item)
-                <div class="col-xl-3 col-md-6">
-                    <div class="card border-0 shadow-sm h-100">
-                        <div class="card-body p-4">
-                            <div class="text-muted fs-7 fw-bold text-uppercase">{{ $item['label'] }}</div>
-                            <div class="mt-3 fs-2 fw-bold text-dark">{{ $item['value'] }}</div>
-                            <div class="mt-2 d-flex align-items-center gap-2 {{ str_contains($item['change'], '-') ? 'text-danger' : 'text-success' }} fs-7 fw-bold">
-                                <i class="ki-duotone {{ str_contains($item['change'], '-') ? 'ki-arrow-down-right' : 'ki-arrow-up-right' }} fs-5"></i>
-                                <span>{{ $item['change'] }}</span>
+            <div class="dg-card dg-card--flush mb-6">
+                <button class="dg-collapse-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#cashStateCollapse" aria-expanded="false" aria-controls="cashStateCollapse">
+                    <span class="d-flex align-items-center gap-3">
+                        <span class="dg-tile dg-tone-yellow"><i class="bi bi-cash-stack"></i></span>
+                        <span>
+                            <span class="dg-collapse-toggle__title">État général des caisses</span>
+                            <span class="dg-collapse-toggle__subtitle">Suivi consolidé des caisses et comptes mobile money</span>
+                        </span>
+                    </span>
+                    <span class="dg-collapse-toggle__end">
+                        <span class="dg-badge dg-badge--neutral">{{ collect($accounts ?? [])->where('is_active', true)->count() }} compte(s) actif(s)</span>
+                        <i class="bi bi-chevron-down" aria-hidden="true"></i>
+                    </span>
+                </button>
+                <div id="cashStateCollapse" class="collapse">
+                    <div class="dg-collapse-body">
+                        @if(!empty($accounts) && count($accounts))
+                            <div class="dg-kpi-grid">
+                                @foreach(($summary ?? []) as $item)
+                                    <x-dg.kpi :label="$item['label']" :value="$item['value']" :hint="$item['change']"
+                                        :icon="['bi-calendar-event', 'bi-box-arrow-in-down', 'bi-box-arrow-up', 'bi-wallet2'][$loop->index] ?? null"
+                                        :color="['indigo', 'green', 'red', 'blue'][$loop->index] ?? 'navy'" />
+                                @endforeach
                             </div>
-                        </div>
-                    </div>
-                </div>
-            @endforeach
-        </div>
 
-                @foreach($accounts as $account)
-                    <div class="col-xl-3 col-md-6">
-                        <div class="card border-0 shadow-sm h-100">
-                            <div class="card-body p-4">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <div>
-                                        <div class="text-muted fs-7 fw-bold text-uppercase">{{ ucfirst($account->account_type) }}</div>
-                                        <h6 class="mb-0 fw-bold text-dark">{{ $account->name }}</h6>
+                            <div class="dg-account-grid">
+                                @foreach($accounts as $account)
+                                    <div class="dg-account-card {{ $account->is_active ? ($account->account_type === 'mobile_money' ? 'dg-tone-cyan' : 'dg-tone-yellow') : 'dg-account-card--muted' }}">
+                                        <div class="dg-account-card__head">
+                                            <div>
+                                                <div class="dg-account-card__name">{{ $account->name }}</div>
+                                                <div class="dg-account-card__meta">{{ $account->account_type === 'mobile_money' ? 'Mobile money' : 'Caisse' }}</div>
+                                            </div>
+                                            <span class="dg-tile dg-tile--sm"><i class="bi {{ $account->account_type === 'mobile_money' ? 'bi-phone' : 'bi-cash' }}" aria-hidden="true"></i></span>
+                                        </div>
+                                        <div class="dg-account-card__balance">{{ money((float) ($account->period_balance ?? $account->balance)) }}</div>
+                                        <dl class="dg-account-card__lines">
+                                            <div><dt>Statut</dt><dd><span class="dg-badge dg-badge--{{ $account->is_active ? 'success' : 'neutral' }}">{{ $account->is_active ? 'Actif' : 'Inactif' }}</span></dd></div>
+                                            <div><dt>Ouverture période</dt><dd>{{ money((float) ($account->period_initial_balance ?? $account->initial_balance)) }}</dd></div>
+                                            <div><dt>Solde à la création</dt><dd>{{ money((float) $account->initial_balance) }}</dd></div>
+                                        </dl>
+                                        <div class="dg-account-card__actions">
+                                            <button type="button" class="dg-btn dg-btn--outline dg-btn--sm" data-bs-toggle="modal" data-bs-target="#cashAccountDetailsModal-{{ $account->id }}" aria-label="Voir les détails de {{ $account->name }}"><i class="bi bi-eye"></i>Voir</button>
+                                            <form method="POST" action="{{ route('admin.comptabilite.caisses.toggleStatus', $account) }}">
+                                                @csrf
+                                                <button type="submit" class="dg-btn dg-btn--outline dg-btn--sm">{{ $account->is_active ? 'Fermer' : 'Ouvrir' }}</button>
+                                            </form>
+                                            <button type="button" class="dg-icon-btn dg-icon-btn--sm" data-bs-toggle="modal" data-bs-target="#editCashAccountModal-{{ $account->id }}" title="Modifier" aria-label="Modifier {{ $account->name }}"><i class="bi bi-pencil-square"></i></button>
+                                            <form method="POST" action="{{ route('admin.comptabilite.caisses.destroyAccount', $account) }}" onsubmit="return confirm('Supprimer cette caisse ?');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="dg-icon-btn dg-icon-btn--sm dg-icon-btn--danger" title="Supprimer" aria-label="Supprimer {{ $account->name }}"><i class="bi bi-trash"></i></button>
+                                            </form>
+                                        </div>
                                     </div>
-                                    <span class="badge {{ $account->is_active ? 'badge-light-success' : 'badge-light-secondary' }}">{{ $account->is_active ? 'Actif' : 'Inactif' }}</span>
-                                </div>
-                                <div class="fs-3 fw-bold text-dark">{{ money((float) ($account->period_balance ?? $account->balance)) }}</div>
-                                <div class="text-muted fs-7 mt-2">Ouverture période: {{ money((float) ($account->period_initial_balance ?? $account->initial_balance)) }}</div>
-                                <div class="text-muted fs-8 mt-1">Initial création: {{ money((float) $account->initial_balance) }}</div>
-
-                                <div class="d-flex gap-2 mt-4 flex-wrap">
-                                    <button type="button" class="btn btn-sm btn-light-primary" data-bs-toggle="modal" data-bs-target="#cashAccountDetailsModal-{{ $account->id }}" title="Voir les détails" aria-label="Voir les détails de {{ $account->name }}"><i class="bi bi-eye me-1"></i>Voir</button>
-                                    <button type="button" class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#editCashAccountModal-{{ $account->id }}">Modifier</button>
-                                    <form method="POST" action="{{ route('admin.comptabilite.caisses.toggleStatus', $account) }}" class="d-inline">
-                                        @csrf
-                                        <button type="submit" class="btn btn-sm {{ $account->is_active ? 'btn-outline-warning' : 'btn-success' }}">
-                                            {{ $account->is_active ? 'Fermer' : 'Ouvrir' }}
-                                        </button>
-                                    </form>
-                                    <form method="POST" action="{{ route('admin.comptabilite.caisses.destroyAccount', $account) }}" class="d-inline" onsubmit="return confirm('Supprimer cette caisse ?');">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="btn btn-sm btn-outline-danger">Supprimer</button>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
 
                     <div class="modal fade" id="cashAccountDetailsModal-{{ $account->id }}" tabindex="-1" aria-hidden="true">
                         <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -1090,17 +1065,16 @@
                             </div>
                         </div>
                     </div>
-                @endforeach
-            </div>
-        @endif
-
+                                @endforeach
                             </div>
-                        </div>
+                        @else
+                            <div class="dg-empty-state">Aucune caisse enregistrée. Créez votre première caisse avec « Nouvelle caisse ».</div>
+                        @endif
                     </div>
                 </div>
             </div>
 
-            <form method="GET" class="row g-3 align-items-end mb-6">
+            <form method="GET" class="dg-card row g-3 align-items-end mx-0 mb-6">
                 <div class="col-xl-2 col-lg-3 col-md-6">
                     <label class="form-label fw-semibold text-muted">Date début</label>
                     <input type="date" name="date_debut" value="{{ $filters['date_debut'] ?? '' }}" class="form-control" />
@@ -1152,23 +1126,18 @@
                 <div class="col-xl-2 col-lg-4 col-md-6">
                     <label class="form-label fw-semibold text-muted">&nbsp;</label>
                     <div class="d-flex gap-3">
-                        <button type="submit" class="btn btn-primary flex-fill">Filtrer</button>
-                        <a href="{{ route('admin.comptabilite.caisses') }}" class="btn btn-light flex-fill">Réinitialiser</a>
+                        <button type="submit" class="btn btn-light flex-fill text-nowrap"><i class="bi bi-funnel me-1"></i>Filtrer</button>
+                        <a href="{{ route('admin.comptabilite.caisses') }}" class="btn btn-light px-3" title="Réinitialiser les filtres" aria-label="Réinitialiser les filtres"><i class="bi bi-arrow-counterclockwise"></i></a>
                     </div>
                 </div>
             </form>
 
-            <div class="card border-0 shadow-sm">
-                <div class="card-header border-0 bg-white px-4 py-3 d-flex justify-content-between align-items-center">
-                    <div>
-                        <div class="text-uppercase text-muted fs-8 fw-bold ls-1">Détails</div>
-                        <h5 class="mb-0 fw-bold text-dark">Mouvements de caisse</h5>
-                    </div>
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print()">Imprimer</button>
-                    </div>
+            <div class="dg-card dg-card--table">
+                <div class="dg-card__header">
+                    <h2 class="dg-card__title"><span class="dg-tile dg-tile--sm dg-tone-green"><i class="bi bi-arrow-left-right"></i></span>Mouvements de caisse</h2>
+                    <button type="button" class="dg-btn dg-btn--outline dg-btn--sm" onclick="window.print()"><i class="bi bi-printer"></i>Imprimer</button>
                 </div>
-                <div class="card-body p-0">
+                <div>
                     <div class="table-responsive">
                         <table id="cashMovementTable" class="table table-striped table-hover align-middle mb-0 cash-movement-table">
                             <thead>
@@ -1179,21 +1148,22 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @forelse(($tableRows ?? []) as $row)
+                                {{-- Pas de ligne « vide » fusionnée : DataTables la refuse (« Incorrect column count ») et affiche lui-même son message. --}}
+                                @foreach(($tableRows ?? []) as $row)
                                     <tr>
                                         @foreach($row as $key => $cell)
                                             @if($key === array_key_last($row))
                                                 <td>{!! $cell !!}</td>
+                                            @elseif($key === 2)
+                                                <td><span class="dg-badge dg-badge--{{ ['Entrée' => 'success', 'Sortie' => 'danger'][$cell] ?? 'neutral' }}">{{ $cell }}</span></td>
+                                            @elseif($key === 3 || $key === 6)
+                                                <td class="dg-cell-num">{{ $cell }}</td>
                                             @else
                                                 <td>{{ $cell }}</td>
                                             @endif
                                         @endforeach
                                     </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="{{ count($tableColumns ?? []) }}" class="text-center text-muted py-5">Aucun mouvement trouvé pour cette période.</td>
-                                    </tr>
-                                @endforelse
+                                @endforeach
                             </tbody>
                         </table>
                     </div>
@@ -1205,7 +1175,8 @@
                     if (window.jQuery && $.fn.DataTable) {
                         $('#cashMovementTable').DataTable({
                             language: {
-                                url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/fr-FR.json'
+                                url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/fr-FR.json',
+                                emptyTable: 'Aucun mouvement trouvé pour cette période.'
                             },
                             paging: true,
                             searching: true,
@@ -2039,6 +2010,43 @@
                     })();
                 </script>
             </div>
+        @elseif($isTreasury)
+            <div class="dg-card dg-card--table mt-6">
+                <div class="dg-card__header">
+                    <h2 class="dg-card__title"><span class="dg-tile dg-tile--sm dg-tone-blue"><i class="bi bi-bank"></i></span>Comptes bancaires</h2>
+                    <button type="button" class="dg-btn dg-btn--outline dg-btn--sm" onclick="window.print()"><i class="bi bi-printer"></i>Imprimer</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                @foreach(($tableColumns ?? []) as $column)
+                                    <th>{{ $column }}</th>
+                                @endforeach
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse(($tableRows ?? []) as $row)
+                                <tr>
+                                    @foreach($row as $cell)
+                                        @if($loop->index === 4 && in_array($cell, ['Crédit', 'Débit'], true))
+                                            <td><span class="dg-badge dg-badge--{{ $cell === 'Crédit' ? 'success' : 'warning' }}">{{ $cell }}</span></td>
+                                        @elseif($loop->index === 2)
+                                            <td class="dg-cell-num">{!! $cell !!}</td>
+                                        @else
+                                            <td>{!! $cell !!}</td>
+                                        @endif
+                                    @endforeach
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="{{ count($tableColumns ?? []) }}" class="text-center text-muted py-8">Aucune donnée pour cette période.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         @else
             <div class="card border-0 shadow-sm">
                 <div class="card-header border-0 bg-white px-5 py-4">
@@ -2317,4 +2325,5 @@
         setTimeout(() => win.print(), 300);
     });
 </script>
+</div>
 @endsection

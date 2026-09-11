@@ -103,33 +103,6 @@
             min-width: 0;
         }
 
-        /* ===== RECHERCHE D'EMPLOYÉS (barre du haut) ===== */
-        .employee-search-results {
-           position: absolute;
-           top: calc(100% + 8px);
-           left: 0;
-           right: 0;
-           z-index: 1050;
-           display: none;
-           max-height: 320px;
-           overflow-y: auto;
-           background: #fff;
-           border: 1px solid #e3e7ef;
-           border-radius: 10px;
-           box-shadow: 0 12px 28px rgba(15, 23, 42, .14);
-        }
-
-        .employee-search-result {
-           display: block;
-           padding: .7rem .85rem;
-           color: #172033;
-           text-decoration: none;
-           border-bottom: 1px solid #f0f2f5;
-        }
-
-        .employee-search-result:hover { background: #f7f8fb; }
-        .employee-search-empty { padding: .8rem .85rem; color: #8a93a6; }
-
         /* ===== CONTENT ===== */
         .app-content {
             flex: 1;
@@ -550,44 +523,50 @@
                         @hasSection('topbar')
                             @yield('topbar')
                         @else
-                            <div class="dg-search" id="employee-search">
+                            @php($searchPlaceholder = $currentUser->hasRole('super_admin') ? __('Search a company...') : __('Global search (employees, clients, invoices…)'))
+                            <div class="dg-search" id="global-search" role="search">
                                 <i class="bi bi-search" aria-hidden="true"></i>
-                                <input type="search" id="employee-search-input" placeholder="{{ __('Search an employee...') }}" autocomplete="off" aria-label="{{ __('Search an employee...') }}" />
-                                <div class="employee-search-results" id="employee-search-results"></div>
+                                <input type="search" id="global-search-input" placeholder="{{ $searchPlaceholder }}" autocomplete="off"
+                                       aria-label="{{ $searchPlaceholder }}" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="global-search-results" />
+                                <kbd class="dg-search__kbd" aria-hidden="true">Ctrl K</kbd>
+                                <div class="dg-search-results" id="global-search-results" role="listbox" hidden></div>
                             </div>
                         @endif
                     </div>
 
                     <div class="dg-topbar__end">
-                        <span class="dg-org-pill" title="{{ $organisationName }}"><i class="bi bi-buildings" aria-hidden="true"></i><span>{{ $organisationName }}</span></span>
+                        <span class="dg-org-pill" title="{{ $organisationName }}"><span class="dg-tile"><i class="bi bi-buildings" aria-hidden="true"></i></span><span class="dg-org-pill__name">{{ $organisationName }}</span></span>
 
                         <div class="dropdown">
-                            <button class="dg-icon-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{ __('Choose language') }}"><i class="bi bi-globe"></i></button>
-                            <ul class="dropdown-menu dropdown-menu-end dg-dropdown" style="min-width:160px">
+                            <button class="dg-topbar-btn dg-tone-blue" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{ __('Choose language') }}" title="{{ __('Choose language') }}"><i class="bi bi-globe"></i></button>
+                            <ul class="dropdown-menu dropdown-menu-end dg-dropdown" style="min-width:180px">
                                 @php($currentLocale = app()->getLocale())
-                                <li><form method="POST" action="{{ route('locale.update') }}">@csrf<input type="hidden" name="locale" value="fr"><button class="dropdown-item {{ $currentLocale === 'fr' ? 'active' : '' }}" type="submit">Français</button></form></li>
-                                <li><form method="POST" action="{{ route('locale.update') }}">@csrf<input type="hidden" name="locale" value="en"><button class="dropdown-item {{ $currentLocale === 'en' ? 'active' : '' }}" type="submit">English</button></form></li>
+                                <li><form method="POST" action="{{ route('locale.update') }}">@csrf<input type="hidden" name="locale" value="fr"><button class="dropdown-item {{ $currentLocale === 'fr' ? 'active' : '' }}" type="submit"><span class="dg-lang-code">FR</span>Français</button></form></li>
+                                <li><form method="POST" action="{{ route('locale.update') }}">@csrf<input type="hidden" name="locale" value="en"><button class="dropdown-item {{ $currentLocale === 'en' ? 'active' : '' }}" type="submit"><span class="dg-lang-code">EN</span>English</button></form></li>
                             </ul>
                         </div>
 
                         <div class="dropdown">
-                            <button class="dg-icon-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Notifications ({{ $notificationCount ?? 0 }})">
+                            <button class="dg-topbar-btn dg-tone-orange" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Notifications ({{ $notificationCount ?? 0 }})" title="Notifications">
                                 <i class="bi bi-bell"></i>
                                 @if(($notificationCount ?? 0) > 0)
-                                    <span class="dg-dot" aria-hidden="true"></span>
+                                    <span class="dg-count" aria-hidden="true">{{ $notificationCount > 99 ? '99+' : $notificationCount }}</span>
                                 @endif
                             </button>
                             <div class="dropdown-menu dropdown-menu-end dg-dropdown dg-dropdown--wide">
-                                <div class="dg-dropdown__header">{{ __('Notifications') }}@if(($notificationCount ?? 0) > 0) ({{ $notificationCount }})@endif</div>
+                                <div class="dg-dropdown__header d-flex align-items-center gap-2">
+                                    <span class="dg-tile dg-tile--sm dg-tone-orange"><i class="bi bi-bell"></i></span>{{ __('Notifications') }}
+                                    @if(($notificationCount ?? 0) > 0)<span class="dg-badge dg-badge--danger ms-auto">{{ $notificationCount }}</span>@endif
+                                </div>
                                 <a href="{{ route('admin.rh.permissions') }}" class="dg-notification">
-                                    <i class="bi bi-pencil-square"></i><span>{{ $pendingPermissions ?? 0 }} {{ __('Pending permission request(s)') }}</span>
+                                    <span class="dg-tile dg-tile--sm dg-tone-purple"><i class="bi bi-pencil-square"></i></span><span>{{ $pendingPermissions ?? 0 }} {{ __('Pending permission request(s)') }}</span>
                                 </a>
                                 <a href="{{ route('admin.rh.leaves') }}" class="dg-notification">
-                                    <i class="bi bi-calendar-range"></i><span>{{ $pendingLeaves ?? 0 }} {{ __('Pending leave request(s)') }}</span>
+                                    <span class="dg-tile dg-tile--sm dg-tone-cyan"><i class="bi bi-calendar-range"></i></span><span>{{ $pendingLeaves ?? 0 }} {{ __('Pending leave request(s)') }}</span>
                                 </a>
                                 @foreach(($stockAlerts ?? collect()) as $stockAlert)
                                     <a href="{{ route('admin.commercial.module', 'etat-stock') }}" class="dg-notification">
-                                        <i class="bi {{ $stockAlert['quantity'] <= 0 ? 'bi-x-octagon text-danger' : 'bi-exclamation-triangle text-warning' }}"></i>
+                                        <span class="dg-tile dg-tile--sm {{ $stockAlert['quantity'] <= 0 ? 'dg-tone-red' : 'dg-tone-orange' }}"><i class="bi {{ $stockAlert['quantity'] <= 0 ? 'bi-x-octagon' : 'bi-exclamation-triangle' }}"></i></span>
                                         <span>
                                             <strong>{{ $stockAlert['name'] }}</strong>
                                             <small>{{ $stockAlert['quantity'] <= 0 ? 'Rupture de stock' : 'Stock faible' }} · {{ number_format(max(0, $stockAlert['quantity']), 2, ',', ' ') }} {{ $stockAlert['unit'] }}</small>
@@ -596,7 +575,7 @@
                                 @endforeach
                                 @if($pendingAnnualReport ?? null)
                                     <a href="{{ route('admin.bilans.show', $pendingAnnualReport) }}" class="dg-notification">
-                                        <i class="bi bi-file-earmark-bar-graph"></i>
+                                        <span class="dg-tile dg-tile--sm dg-tone-blue"><i class="bi bi-file-earmark-bar-graph"></i></span>
                                         <span>
                                             <strong>{{ $pendingAnnualReport->label() }}</strong>
                                             <small>Exercice clos, bilan non téléchargé</small>
@@ -683,45 +662,6 @@
                     if (e.key === 'Escape') close();
                 });
 
-        (() => {
-                   const input = document.getElementById('employee-search-input');
-                   const results = document.getElementById('employee-search-results');
-                   const container = document.getElementById('employee-search');
-                   if (!input || !results || !container) return;
-
-                   let timer;
-                   const render = (employees) => {
-                       results.innerHTML = employees.length
-                           ? employees.map(employee => `<a class="employee-search-result" href="${employee.url}"><strong>${escapeHtml(employee.name)}</strong><span class="d-block text-muted fs-8">${escapeHtml(employee.matricule || '')}${employee.position ? ' · ' + escapeHtml(employee.position) : ''}</span></a>`).join('')
-                           : '<div class="employee-search-empty">Aucun employé trouvé.</div>';
-                       results.style.display = 'block';
-                   };
-                   const escapeHtml = (value) => String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
-
-                   input.addEventListener('input', () => {
-                       clearTimeout(timer);
-                       const query = input.value.trim();
-                       if (query.length < 2) {
-                           results.style.display = 'none';
-                           return;
-                       }
-                       timer = setTimeout(() => {
-                           fetch(`{{ route('admin.rh.employees.search') }}?q=${encodeURIComponent(query)}`, { headers: { Accept: 'application/json' } })
-                               .then(response => response.ok ? response.json() : Promise.reject(response))
-                               .then(render)
-                               .catch(() => {
-                                   results.innerHTML = '<div class="employee-search-empty">Recherche indisponible.</div>';
-                                   results.style.display = 'block';
-                               });
-                       }, 250);
-                   });
-                   input.addEventListener('focus', () => {
-                       if (input.value.trim().length >= 2) input.dispatchEvent(new Event('input'));
-                   });
-                   document.addEventListener('click', event => {
-                       if (!container.contains(event.target)) results.style.display = 'none';
-                   });
-        })();
             }
         })();
 
@@ -740,14 +680,122 @@
             }
         })();
 
-        // Keyboard shortcut: Ctrl+K or Cmd+K to focus search
-        document.addEventListener('keydown', (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-                e.preventDefault();
-                const searchInput = document.getElementById('employee-search-input');
-                if (searchInput) searchInput.focus();
-            }
-        });
+        // Recherche globale de la barre du haut : résultats regroupés par type, navigation au clavier.
+        (function () {
+            const container = document.getElementById('global-search');
+            const input = document.getElementById('global-search-input');
+            const panel = document.getElementById('global-search-results');
+            if (!container || !input || !panel) return;
+
+            const endpoint = @json(route('admin.search'));
+            const minLength = {{ \App\Services\GlobalSearchService::MIN_LENGTH }};
+            let timer = null;
+            let request = null;
+            let activeIndex = -1;
+
+            const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
+            const highlight = (text, term) => {
+                const value = String(text ?? '');
+                const index = value.toLowerCase().indexOf(term.toLowerCase());
+                if (index < 0) return escapeHtml(value);
+                return escapeHtml(value.slice(0, index)) + '<mark>' + escapeHtml(value.slice(index, index + term.length)) + '</mark>' + escapeHtml(value.slice(index + term.length));
+            };
+            const options = () => Array.from(panel.querySelectorAll('.dg-search-result'));
+            const show = html => {
+                panel.innerHTML = html;
+                panel.hidden = false;
+                input.setAttribute('aria-expanded', 'true');
+                activeIndex = -1;
+            };
+            const hide = () => {
+                panel.hidden = true;
+                input.setAttribute('aria-expanded', 'false');
+                activeIndex = -1;
+            };
+            const setActive = index => {
+                const items = options();
+                if (!items.length) return;
+                activeIndex = (index + items.length) % items.length;
+                items.forEach((item, position) => {
+                    item.classList.toggle('is-active', position === activeIndex);
+                    item.setAttribute('aria-selected', position === activeIndex ? 'true' : 'false');
+                });
+                items[activeIndex].scrollIntoView({ block: 'nearest' });
+            };
+            const render = (groups, term) => {
+                if (!groups.length) {
+                    show('<div class="dg-search-state"><i class="bi bi-search"></i>Aucun résultat pour « ' + escapeHtml(term) + ' »</div>');
+                    return;
+                }
+                show(groups.map(group =>
+                    '<div class="dg-search-group dg-tone-' + escapeHtml(group.color) + '" role="group" aria-label="' + escapeHtml(group.label) + '">'
+                    + '<div class="dg-search-group__label"><span class="dg-tile dg-tile--sm"><i class="bi ' + escapeHtml(group.icon) + '"></i></span>' + escapeHtml(group.label) + '</div>'
+                    + group.items.map(item =>
+                        '<a class="dg-search-result" role="option" aria-selected="false" href="' + escapeHtml(item.url) + '">'
+                        + '<span class="dg-search-result__title">' + highlight(item.title, term) + '</span>'
+                        + '<span class="dg-search-result__sub">' + highlight(item.subtitle, term) + '</span></a>'
+                    ).join('')
+                    + '</div>'
+                ).join(''));
+            };
+            const search = () => {
+                const term = input.value.trim();
+                clearTimeout(timer);
+                if (term.length < minLength) {
+                    hide();
+                    return;
+                }
+                timer = setTimeout(() => {
+                    if (request) request.abort();
+                    request = new AbortController();
+                    show('<div class="dg-search-state"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>Recherche…</div>');
+                    fetch(endpoint + '?q=' + encodeURIComponent(term), { headers: { Accept: 'application/json' }, signal: request.signal })
+                        .then(response => response.ok ? response.json() : Promise.reject(response))
+                        .then(data => {
+                            if (input.value.trim() === term) render(data.groups || [], term);
+                        })
+                        .catch(error => {
+                            if (error && error.name === 'AbortError') return;
+                            show('<div class="dg-search-state dg-search-state--error"><i class="bi bi-exclamation-triangle"></i>Recherche indisponible pour le moment.</div>');
+                        });
+                }, 250);
+            };
+
+            input.addEventListener('input', search);
+            input.addEventListener('focus', () => {
+                if (input.value.trim().length >= minLength) search();
+            });
+            input.addEventListener('keydown', event => {
+                if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    setActive(activeIndex + 1);
+                } else if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    setActive(activeIndex - 1);
+                } else if (event.key === 'Enter') {
+                    const item = options()[activeIndex] || options()[0];
+                    if (item) {
+                        event.preventDefault();
+                        window.location.href = item.href;
+                    }
+                } else if (event.key === 'Escape') {
+                    hide();
+                    input.blur();
+                }
+            });
+            document.addEventListener('click', event => {
+                if (!container.contains(event.target)) hide();
+            });
+
+            // Raccourci Ctrl+K (Cmd+K sur Mac) pour placer le curseur dans la recherche.
+            document.addEventListener('keydown', event => {
+                if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+                    event.preventDefault();
+                    input.focus();
+                    input.select();
+                }
+            });
+        })();
 
         // Add ascending/descending arrows to every sortable data table header.
         (function() {

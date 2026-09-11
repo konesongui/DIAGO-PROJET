@@ -14,16 +14,16 @@
             ->concat($bankTransactions->filter(fn ($item) => $item->transaction_date?->isSameMonth(now()))),
     ];
     $cards = [
-        ['Liquidité totale', $liquidity, 'bi-wallet2', 'Soldes des caisses et des banques'],
-        ['Entrées caisse et banque', $cashIn + $bankIn, 'bi-box-arrow-in-down', 'Encaissements de la période'],
-        ['Sorties caisse et banque', $cashOut + $bankOut, 'bi-box-arrow-up', 'Décaissements de la période'],
-        ['Flux du mois', $monthlyTotal, 'bi-arrow-left-right', 'Mouvements du mois en cours'],
+        ['Liquidité totale', $liquidity, 'bi-wallet2', 'Soldes des caisses et des banques', 'blue'],
+        ['Entrées caisse et banque', $cashIn + $bankIn, 'bi-box-arrow-in-down', 'Encaissements de la période', 'green'],
+        ['Sorties caisse et banque', $cashOut + $bankOut, 'bi-box-arrow-up', 'Décaissements de la période', 'red'],
+        ['Flux du mois', $monthlyTotal, 'bi-arrow-left-right', 'Mouvements du mois en cours', 'purple'],
     ];
     $indicators = [
-        'Comptes caisse' => $detailLists['cash_accounts']->count(),
-        'Comptes bancaires' => $detailLists['bank_accounts']->count(),
-        'Factures fournisseurs' => $detailLists['supplier_invoices']->count(),
-        'Immobilisations' => $detailLists['fixed_assets']->count(),
+        ['Comptes caisse', $detailLists['cash_accounts']->count(), 'bi-cash-stack', 'orange'],
+        ['Comptes bancaires', $detailLists['bank_accounts']->count(), 'bi-bank', 'blue'],
+        ['Factures fournisseurs', $detailLists['supplier_invoices']->count(), 'bi-file-earmark-text', 'pink'],
+        ['Immobilisations', $detailLists['fixed_assets']->count(), 'bi-building', 'purple'],
     ];
 @endphp
 
@@ -41,8 +41,8 @@
     </x-dg.page-header>
 
     <div class="dg-kpi-grid">
-        @foreach($cards as [$label, $value, $icon, $hint])
-            <x-dg.kpi :label="$label" :value="$money($value)" :icon="$icon" :hint="$hint">
+        @foreach($cards as [$label, $value, $icon, $hint, $color])
+            <x-dg.kpi :label="$label" :value="$money($value)" :icon="$icon" :hint="$hint" :color="$color">
                 <button type="button" class="dg-link-btn d-flex mt-2" data-bs-toggle="modal" data-bs-target="#accountingDetail{{ $loop->index }}">
                     <i class="bi bi-eye"></i>Voir le détail
                 </button>
@@ -51,14 +51,26 @@
     </div>
 
     <div class="dg-grid-2">
-        <x-dg.card title="Évolution des flux (6 derniers mois)" :meta="'Montants en ' . currency_symbol()">
-            <div class="dg-chart"><canvas id="accountingFlowsChart" role="img" aria-label="Évolution des entrées et sorties sur six mois"></canvas></div>
+        <x-dg.card title="Évolution des flux (6 derniers mois)" icon="bi-bar-chart-line" color="blue" :meta="'Montants en ' . currency_symbol()">
+            @if($months->sum(fn ($month) => $month['entries'] + $month['sorties']) > 0)
+                <div class="dg-chart"><canvas id="accountingFlowsChart" role="img" aria-label="Évolution des entrées et sorties sur six mois"></canvas></div>
+            @else
+                <div class="dg-chart">
+                    <div class="dg-chart-empty">
+                        <span class="dg-tile dg-tone-blue"><i class="bi bi-bar-chart-line"></i></span>
+                        <div><strong>Aucun flux sur les 6 derniers mois</strong>Les entrées et sorties de caisse et de banque s’afficheront ici.</div>
+                    </div>
+                </div>
+            @endif
         </x-dg.card>
-        <x-dg.card title="Indicateurs">
+        <x-dg.card title="Indicateurs" icon="bi-speedometer2" color="purple">
             <table class="dg-mini-table">
                 <tbody>
-                    @foreach($indicators as $label => $count)
-                        <tr><td>{{ $label }}</td><td>{{ $count }}</td></tr>
+                    @foreach($indicators as [$label, $count, $icon, $color])
+                        <tr>
+                            <td><span class="d-inline-flex align-items-center gap-3"><span class="dg-tile dg-tile--sm dg-tone-{{ $color }}"><i class="bi {{ $icon }}"></i></span>{{ $label }}</span></td>
+                            <td>{{ $count }}</td>
+                        </tr>
                     @endforeach
                 </tbody>
             </table>
@@ -66,12 +78,12 @@
     </div>
 </div>
 
-@foreach($cards as [$label])
-    <div class="modal fade dg-modal" id="accountingDetail{{ $loop->index }}" tabindex="-1" aria-labelledby="accountingDetailTitle{{ $loop->index }}" aria-hidden="true">
+@foreach($cards as [$label, $value, $icon, $hint, $color])
+    <div class="modal fade dg-modal dg-tone-{{ $color }}" id="accountingDetail{{ $loop->index }}" tabindex="-1" aria-labelledby="accountingDetailTitle{{ $loop->index }}" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="accountingDetailTitle{{ $loop->index }}">{{ $label }}</h5>
+                    <h5 class="modal-title" id="accountingDetailTitle{{ $loop->index }}"><i class="bi {{ $icon }}" aria-hidden="true"></i>{{ $label }}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
                 </div>
                 <div class="modal-body">
@@ -82,8 +94,12 @@
                                 @forelse($details[$loop->index] as $item)
                                     <tr>
                                         <td>
-                                            <span class="dg-cell-strong">{{ $item->name ?? $item->label ?? $item->description ?? $item->reference ?? 'Opération' }}</span>
-                                            <span class="dg-cell-sub">{{ collect([$item->bank_name ?? $item->cashAccount?->name ?? $item->bankAccount?->name, ($item->movement_date ?? $item->transaction_date)?->format('d/m/Y')])->filter()->implode(' · ') }}</span>
+                                            @php
+                                                $itemTitle = $item->name ?? $item->label ?? $item->description ?? $item->reference ?? 'Opération';
+                                                $itemAccount = $item->bank_name ?? $item->cashAccount?->name ?? $item->bankAccount?->name;
+                                            @endphp
+                                            <span class="dg-cell-strong">{{ $itemTitle }}</span>
+                                            <span class="dg-cell-sub">{{ collect([strcasecmp((string) $itemAccount, (string) $itemTitle) === 0 ? null : $itemAccount, ($item->movement_date ?? $item->transaction_date)?->format('d/m/Y')])->filter()->implode(' · ') }}</span>
                                         </td>
                                         <td class="dg-cell-num dg-cell-actions">{{ $money($item->amount ?? $item->balance ?? $item->current_balance ?? $item->acquisition_value ?? 0) }}</td>
                                     </tr>
@@ -91,6 +107,9 @@
                                     <tr><td colspan="2" class="dg-empty">Aucun enregistrement sur la période.</td></tr>
                                 @endforelse
                             </tbody>
+                            <tfoot>
+                                <tr><td>Total</td><td class="dg-cell-num dg-cell-actions">{{ $money($value) }}</td></tr>
+                            </tfoot>
                         </table>
                     </div>
                 </div>
@@ -105,17 +124,19 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
 (function () {
+    const flowsCanvas = document.getElementById('accountingFlowsChart');
+    if (!flowsCanvas) return;
     const months = @json($months);
     const compact = new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 });
     Chart.defaults.font.family = "'Poppins', system-ui, sans-serif";
     Chart.defaults.color = '#8a93a6';
-    new Chart(document.getElementById('accountingFlowsChart'), {
+    new Chart(flowsCanvas, {
         type: 'bar',
         data: {
             labels: months.map(month => month.label.charAt(0).toUpperCase() + month.label.slice(1)),
             datasets: [
-                { label: 'Entrées', data: months.map(month => month.entries), backgroundColor: '#273772', borderRadius: 6, maxBarThickness: 28 },
-                { label: 'Sorties', data: months.map(month => month.sorties), backgroundColor: '#fadf2f', borderRadius: 6, maxBarThickness: 28 }
+                { label: 'Entrées', data: months.map(month => month.entries), backgroundColor: '#10b981', borderRadius: 6, maxBarThickness: 28 },
+                { label: 'Sorties', data: months.map(month => month.sorties), backgroundColor: '#ef4444', borderRadius: 6, maxBarThickness: 28 }
             ]
         },
         options: {

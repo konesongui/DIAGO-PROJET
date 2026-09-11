@@ -1,13 +1,16 @@
 {{--
     Indicateur chiffré.
-    - tone : « danger » colore la pastille d'icône en rouge (ex. factures impayées).
-    - accent : navy | success | yellow ajoute le liseré gauche des cartes de comptes (Trésorerie).
+    - color : blue | green | purple | orange | red | teal | cyan | pink | indigo | yellow | navy (défaut)
+      colore la pastille d'icône, le liseré et le lien de détail.
+    - tone : « danger » équivaut à color="red" (compatibilité).
+    - accent : navy | success | yellow ; liseré gauche des cartes de comptes (Trésorerie) au lieu du liseré supérieur.
     - trend / trendDirection (up|down) / trendTone (success|danger) : variation affichée sous la valeur.
 --}}
 @props([
     'label',
     'value',
     'icon' => null,
+    'color' => null,
     'tone' => null,
     'accent' => null,
     'trend' => null,
@@ -18,15 +21,15 @@
 
 @php
     $trendTone ??= $trendDirection === 'up' ? 'success' : 'danger';
-    $classes = 'dg-kpi' . ($accent ? " dg-kpi--accent dg-kpi--accent-{$accent}" : '');
-    $iconClasses = 'dg-kpi__icon' . ($tone === 'danger' ? ' dg-kpi__icon--danger' : '') . ($accent ? ' dg-kpi__icon--plain' : '');
+    $color ??= $tone === 'danger' ? 'red' : (['success' => 'green', 'yellow' => 'yellow'][$accent] ?? 'navy');
+    $classes = "dg-kpi dg-tone-{$color}" . ($accent ? ' dg-kpi--accent' : '');
 @endphp
 
 <div {{ $attributes->merge(['class' => $classes]) }}>
     <div class="dg-kpi__head">
         <span class="dg-kpi__label">{{ $label }}</span>
         @if($icon)
-            <span class="{{ $iconClasses }}"><i class="bi {{ $icon }}"></i></span>
+            <span class="dg-kpi__icon"><i class="bi {{ $icon }}"></i></span>
         @endif
     </div>
     <div class="dg-kpi__value">{{ $value }}</div>
