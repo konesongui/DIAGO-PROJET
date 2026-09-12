@@ -1,16 +1,101 @@
-<!doctype html>
-<html lang="fr">
-<head>
-<meta charset="utf-8"><title>Devis {{ $quote->reference ?: '' }}</title>
-<style>
-@page{margin:18mm 16mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#555;font-size:12px;margin:0}.clearfix:after{content:"";display:table;clear:both}.header{border-bottom:1px solid #aaa;padding:8px 0 14px;margin-bottom:22px}.company{float:left;width:55%}.company h2{margin:0 0 8px;color:#17233d;font-size:20px}.company p{line-height:1.55;margin:0}.document{float:right;width:42%;text-align:right}.document h1{color:#0087c3;font-size:27px;font-weight:400;margin:0 0 10px}.document p{line-height:1.6;margin:0}.block{margin-bottom:18px}.client{border-left:6px solid #0087c3;padding:7px 0 7px 12px;line-height:1.55}.client strong{font-size:15px;color:#222}.subject{margin-top:10px}.items{width:100%;border-collapse:collapse;margin-top:18px}.items th{background:#eee;padding:11px 8px;text-align:center;font-weight:400;border-bottom:1px solid white}.items td{background:#f7f7f7;padding:10px 8px;border-bottom:1px solid white}.items .desc{text-align:left}.items .center{text-align:center}.items .right{text-align:right;white-space:nowrap}.totals{width:40%;margin:18px 0 0 auto;border-collapse:collapse}.totals td{padding:8px 10px;text-align:right;border-top:1px solid #ddd}.totals tr:last-child td{color:#168b47;font-size:16px;border-top:1px solid #168b47}.notes{border-left:6px solid #0087c3;padding-left:12px;margin-top:22px}.footer{border-top:1px solid #aaa;color:#777;text-align:center;margin-top:38px;padding-top:10px;font-size:10px}@media print{.no-print{display:none}}
-</style>
-</head>
-<body>
-<header class="header clearfix"><div class="company"><h2>{{ $company?->name ?: 'Diagoma ERP' }}</h2><p>{{ data_get($company?->settings, 'address') ?: 'Adresse de l’entreprise' }}<br>Tél : {{ data_get($company?->settings, 'phone') ?: '-' }}<br>Email : {{ data_get($company?->settings, 'email') ?: '-' }}<br>NIF : {{ data_get($company?->settings, 'nif') ?: '-' }}</p></div><div class="document"><h1>DEVIS N° {{ $quote->reference ?: $quote->id }}</h1><p>Date : {{ optional($quote->quote_date)->format('d/m/Y') }}<br>Validité : {{ optional($quote->due_date)->format('d/m/Y') ?: '-' }}<br>Statut : {{ $quote->status === 'validated' ? 'Validé' : 'En attente' }}</p></div></header>
-<div class="block client"><strong>Client</strong><br>{{ $client?->name ?: $quote->client_name }}<br>{{ $client?->address ?: '-' }}<br>Tél : {{ $client?->phone ?: '-' }}<br>Email : {{ $client?->email ?: '-' }}<div class="subject"><strong>Objet :</strong> {{ $quote->subject ?: '-' }}</div></div>
-<table class="items"><thead><tr><th>Article</th><th>Catégorie</th><th>Qté</th><th>Unité</th><th>Prix unitaire HT</th><th>Total HT</th></tr></thead><tbody>@foreach($quote->lines as $line)<tr><td class="desc">{{ $line['item_name'] ?? '-' }}</td><td class="desc">{{ $line['category_name'] ?? '-' }}</td><td class="center">{{ $line['quantity'] ?? 0 }}</td><td class="center">{{ $line['unit'] ?? '-' }}</td><td class="right">{{ money($line['unit_price'] ?? 0) }}</td><td class="right">{{ money((float)($line['quantity'] ?? 0)*(float)($line['unit_price'] ?? 0)) }}</td></tr>@endforeach</tbody></table>
-<table class="totals"><tr><td>Total HT</td><td>{{ money($quote->total_ht) }}</td></tr>@if($quote->total_discount > 0)<tr><td>Remise</td><td>- {{ money($quote->total_discount) }}</td></tr>@endif<tr><td>TVA ({{ $quote->tax_rate }}%)</td><td>{{ money($quote->tax_amount) }}</td></tr><tr><td><strong>Total TTC</strong></td><td><strong>{{ money($quote->total_ttc) }}</strong></td></tr></table>
-<div class="notes"><strong>Conditions</strong><br>Termes de paiement : {{ $quote->payment_terms ?: '-' }}<br>Termes de livraison : {{ $quote->delivery_terms ?: '-' }}<br>Lieu de livraison : {{ $quote->delivery_location ?: '-' }}</div>
-<footer class="footer">{{ $company?->name ?: 'Diagoma ERP' }} – Document généré le {{ now()->format('d/m/Y à H:i') }}</footer><script>window.print()</script>
-</body></html>
+@extends('admin.print.layout')
+
+@php
+    $expired = $quote->status === 'pending_validation' && $quote->due_date && $quote->due_date->lt(now()->startOfDay());
+    [$statusLabel, $statusTone] = $quote->status === 'validated'
+        ? ['Validé', 'success']
+        : ($expired ? ['Expiré', 'danger'] : ['En attente de validation', 'warning']);
+
+    // Totaux : lignes HT, remise, HT net (base de la TVA), TVA et TTC portés par le devis.
+    $grossHt = (float) $quote->total_ht;
+    $discount = (float) $quote->total_discount;
+    $netHt = $quote->net_ht !== null ? (float) $quote->net_ht : $grossHt - $discount;
+    // Anciens devis sans régime fiscal : seule la valeur TTC est fiable.
+    $hasTaxBreakdown = ! in_array($quote->tax_regime, [null, '', 'unknown'], true);
+    $rate = rtrim(rtrim(number_format((float) $quote->tax_rate, 2, ',', ''), '0'), ',');
+    $taxLabel = in_array($quote->tax_regime, ['exempt', 'export', 'reverse_charge'], true)
+        ? 'TVA (' . mb_strtolower(\App\Models\TaxRate::regimes()[$quote->tax_regime]) . ')'
+        : 'TVA (' . $rate . ' %)';
+
+    $settings = $company?->settings ?? [];
+    $bankDetails = collect([data_get($settings, 'bank_name'), data_get($settings, 'bank_account') ? 'compte n° ' . data_get($settings, 'bank_account') : null])->filter()->implode(', ');
+@endphp
+
+@section('title', 'Devis ' . ($quote->reference ?: $quote->id))
+@section('doc-title', 'DEVIS')
+
+@section('doc-meta')
+    <p class="number">N° {{ $quote->reference ?: $quote->id }}</p>
+    <p>Date : {{ $quote->quote_date?->format('d/m/Y') ?: '—' }}@if($quote->due_date) · valable jusqu’au {{ $quote->due_date->format('d/m/Y') }}@endif</p>
+    <span class="pill pill--{{ $statusTone }}">{{ $statusLabel }}</span>
+@endsection
+
+@section('content')
+    <section class="parties">
+        <div class="box box--accent">
+            <h2>Client</h2>
+            <strong>{{ $client?->name ?: $quote->client_name }}</strong>
+            @if($client?->address)<p>{{ $client->address }}</p>@endif
+            @if($client?->city)<p>{{ $client->city }}</p>@endif
+            @if($client?->phone || $client?->email)<p>{{ collect([$client?->phone ? 'Tél : ' . $client->phone : null, $client?->email])->filter()->implode(' · ') }}</p>@endif
+            @if($client?->tax_id)<p>Compte contribuable : {{ $client->tax_id }}</p>@endif
+        </div>
+        <div class="box">
+            <h2>Références</h2>
+            <dl>
+                @if($quote->subject)<dt>Objet</dt><dd>{{ $quote->subject }}</dd>@endif
+                @if($quote->customer_order_code)<dt>Bon de commande</dt><dd>{{ $quote->customer_order_code }}</dd>@endif
+                <dt>Mode de paiement</dt><dd>{{ $quote->payment_method ?: '—' }}</dd>
+                @if($quote->delivery_location)<dt>Lieu de livraison</dt><dd>{{ $quote->delivery_location }}</dd>@endif
+            </dl>
+        </div>
+    </section>
+
+    @include('admin.print.item-lines', ['lines' => $quote->lines ?? []])
+
+    <section class="summary">
+        <div class="notes">
+            @if($quote->payment_terms)
+                <h3>Conditions de règlement</h3>
+                <p>{{ $quote->payment_terms }}</p>
+            @endif
+            @if($quote->delivery_terms)
+                <h3>Conditions de livraison</h3>
+                <p>{{ $quote->delivery_terms }}</p>
+            @endif
+            @if($bankDetails)
+                <h3>Règlement par virement</h3>
+                <p>{{ $bankDetails }}</p>
+            @endif
+        </div>
+        <table class="totals">
+            @if($hasTaxBreakdown)
+                @if($discount > 0)
+                    <tr><td>Total HT brut</td><td>{{ money($grossHt) }}</td></tr>
+                    <tr><td>Remise</td><td>− {{ money($discount) }}</td></tr>
+                @endif
+                <tr><td>Total HT</td><td>{{ money($netHt) }}</td></tr>
+                <tr><td>{{ $taxLabel }}</td><td>{{ money((float) $quote->tax_amount) }}</td></tr>
+            @endif
+            <tr class="due"><td>Total TTC</td><td>{{ money((float) $quote->total_ttc) }}</td></tr>
+        </table>
+    </section>
+
+    @if($quote->status !== 'validated')
+        {{-- Le client retourne le devis signé : c'est son acceptation. --}}
+        <section class="agreement">
+            <div class="agreement__box">
+                <strong>Bon pour accord</strong>
+                <span>Date, cachet et signature du client, précédés de la mention « Bon pour accord »</span>
+            </div>
+        </section>
+    @endif
+@endsection
+
+@push('scripts')
+    <style>
+        .agreement { display: flex; justify-content: flex-end; margin-top: 18px; break-inside: avoid; }
+        .agreement__box { width: 46%; min-height: 92px; padding: 10px 14px; border: 1px dashed #9aa3b5; border-radius: 10px; font-size: 11px; color: var(--muted); }
+        .agreement__box strong { display: block; margin-bottom: 2px; color: var(--text); font-size: 12px; }
+    </style>
+@endpush

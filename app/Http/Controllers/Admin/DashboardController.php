@@ -102,7 +102,7 @@ class DashboardController extends AdminController
             $revenueTrend['values'][] = (float) $yearEntries->filter(fn ($item) => $item->movement_date?->format('Y-m') === $key)->sum('amount')
                 + (float) $yearCredits->filter(fn ($item) => $item->transaction_date?->format('Y-m') === $key)->sum('amount');
         }
-        $revenueTrend['range'] = ucfirst($yearStart->translatedFormat('M')) . ' – ' . $to->translatedFormat('M Y');
+        $revenueTrend['range'] = ucfirst($yearStart->translatedFormat('M')) . ' - ' . $to->translatedFormat('M Y');
 
         // Répartition des dépenses : cinq premiers postes, le reste regroupé.
         $expenseTotal = (float) $expenseCategories->sum();

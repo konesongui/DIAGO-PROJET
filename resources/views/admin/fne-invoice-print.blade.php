@@ -1,60 +1,114 @@
-<!doctype html>
-<html lang="fr">
-<head>
-    <meta charset="utf-8">
-    <title>Facture FNE {{ $invoice->fne_reference }}</title>
-    <style>
-        @page{size:A4;margin:1.5cm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#000;line-height:1.4}.company-frame{border:2px solid #000;padding:8px 12px;margin-bottom:10px;display:inline-block;font-weight:bold;font-size:14px;line-height:1.5}.header{display:flex;justify-content:space-between;margin-bottom:12px}.company-info,.client-info{width:48%}.title{font-size:15px;font-weight:bold;margin-bottom:12px}.badge{background:#198754;color:#fff;padding:6px 10px;border-radius:4px;font-weight:bold;display:inline-block;margin-top:10px}.rule{border:0;border-top:1px solid #000;margin:10px 0}.items,.summary,.totals{width:100%;border-collapse:collapse;margin-top:15px}.items{border:1px solid #000}.items th,.items td,.summary th,.summary td,.totals td{border:1px solid #000;padding:7px 5px}.items th,.summary th{background:#f2f2f2;text-align:left}.right{text-align:right}.totals{width:40%;margin-left:auto}.totals td:first-child{font-weight:bold}.fne-box{border:2px solid #198754;margin-top:18px;padding:10px;line-height:1.7}.fne-box strong{color:#198754}.verification{margin-top:14px;border:1px dashed #198754;padding:10px}.footer{margin-top:28px;border-top:1px solid #000;padding-top:8px;font-size:10px;display:flex;justify-content:space-between}@media print{.no-print{display:none}}
-    </style>
-</head>
-<body>
-    <div class="company-frame">
-        {{ $company?->name ?: 'Diagoma ERP' }}<br>
-        NCC : {{ data_get($company?->settings, 'ncc') ?: '-' }}<br>
-        Régime d'imposition : {{ data_get($company?->settings, 'regime_imposition') ?: '-' }}<br>
-        Centre des impôts : {{ data_get($company?->settings, 'centre_impot') ?: '-' }}
+@extends('admin.print.layout')
+
+@php
+    $isSale = $documentType === 'Vente';
+    $settings = $company?->settings ?? [];
+    // Clés enregistrées par les paramètres de l'entreprise ; les anciennes clés servent de repli.
+    $fiscal = [
+        'NCC' => data_get($settings, 'taxpayer_account') ?: data_get($settings, 'ncc'),
+        'Régime d’imposition' => data_get($settings, 'tax_regime') ?: data_get($settings, 'regime_imposition'),
+        'Centre des impôts' => data_get($settings, 'tax_center') ?: data_get($settings, 'centre_impot'),
+        'RCCM' => data_get($settings, 'nccm_rccm') ?: data_get($settings, 'rccm'),
+    ];
+    $quote = $isSale ? $invoice->delivery?->order?->quote : null;
+    // Le jeton renvoyé par la FNE est l'adresse de vérification de la facture.
+    $verificationUrl = filter_var($invoice->fne_token, FILTER_VALIDATE_URL) ? $invoice->fne_token : null;
+@endphp
+
+@section('title', 'Facture FNE ' . $invoice->fne_reference)
+@section('doc-title', 'FACTURE NORMALISÉE')
+
+@section('doc-meta')
+    <p class="number">N° {{ $invoice->fne_reference }}</p>
+    <p>{{ $isSale ? 'Facture de vente' : 'Facture d’achat' }} · certifiée le {{ $invoice->fne_certified_at?->format('d/m/Y à H:i') ?: '—' }}</p>
+    <span class="pill pill--success"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M13.485 3.431a1 1 0 0 1 .084 1.412l-6.5 7.5a1 1 0 0 1-1.479.034l-3-3.1a1 1 0 1 1 1.437-1.39l2.24 2.316 5.806-6.7a1 1 0 0 1 1.412-.072z"/></svg>Certifiée FNE</span>
+@endsection
+
+@section('content')
+    <div class="fiscal-frame">
+        <strong>{{ $company?->name ?: 'DIAGO' }}</strong>
+        <dl>
+            @foreach($fiscal as $label => $value)
+                <dt>{{ $label }}</dt><dd>{{ $value ?: '—' }}</dd>
+            @endforeach
+        </dl>
     </div>
 
-    <div class="header">
-        <div class="company-info">
-            <strong>Informations société</strong><br>
-            RCCM : {{ data_get($company?->settings, 'rccm') ?: '-' }}<br>
-            Adresse : {{ data_get($company?->settings, 'address') ?: '-' }}<br>
-            Téléphone : {{ data_get($company?->settings, 'phone') ?: '-' }}<br>
-            Email : {{ data_get($company?->settings, 'email') ?: '-' }}<br><br>
-            <strong>Informations facture</strong><br>
-            Date : {{ optional($invoice->fne_certified_at ?: $invoice->created_at)->format('d/m/Y H:i') }}<br>
-            Type : Facture {{ $documentType }}
-        </div>
-        <div class="client-info">
-            <div class="title">FACTURE {{ strtoupper($documentType) }} N° {{ $invoice->fne_reference }}</div>
-            <strong>{{ $documentType === 'Vente' ? 'Client' : 'Fournisseur' }}</strong><br>
-            {{ $documentType === 'Vente' ? ($client?->name ?: $invoice->client_name) : ($invoice->supplier_name ?: '-') }}<br>
-            {{ $documentType === 'Vente' ? ($client?->address ?: '-') : 'NCC / NIF : '.($invoice->supplier_tax_id ?: '-') }}<br>
-            @if($documentType === 'Vente')Téléphone : {{ $client?->phone ?: '-' }}<br>NCC : {{ $client?->tax_id ?: '-' }}@endif
-            <div class="badge">✓ CERTIFIÉE FNE</div>
-        </div>
-    </div>
+    <section class="parties">
+        @if($isSale)
+            <div class="box box--accent">
+                <h2>Client</h2>
+                <strong>{{ $client?->name ?: $invoice->client_name }}</strong>
+                @if($client?->address)<p>{{ $client->address }}</p>@endif
+                @if($client?->phone || $client?->email)<p>{{ collect([$client?->phone ? 'Tél : ' . $client->phone : null, $client?->email])->filter()->implode(' · ') }}</p>@endif
+                <p>NCC : {{ $client?->tax_id ?: '—' }}</p>
+            </div>
+            <div class="box">
+                <h2>Références</h2>
+                <dl>
+                    <dt>Facture interne</dt><dd>N° {{ $invoice->id }}</dd>
+                    <dt>Date d’émission</dt><dd>{{ ($invoice->issued_at ?? $invoice->created_at)?->format('d/m/Y') ?: '—' }}</dd>
+                    <dt>Bon de commande</dt><dd>{{ $invoice->delivery?->order?->customer_order_code ?: '—' }}</dd>
+                    @if($quote?->payment_method)<dt>Mode de paiement</dt><dd>{{ $quote->payment_method }}</dd>@endif
+                </dl>
+            </div>
+        @else
+            <div class="box box--accent">
+                <h2>Fournisseur</h2>
+                <strong>{{ $invoice->supplier_name ?: 'Fournisseur à vérifier' }}</strong>
+                <p>NCC : {{ $invoice->supplier_tax_id ?: '—' }}</p>
+            </div>
+            <div class="box">
+                <h2>Références</h2>
+                <dl>
+                    <dt>Facture fournisseur</dt><dd>{{ $invoice->invoice_number ?: '—' }}</dd>
+                    <dt>Date de facture</dt><dd>{{ $invoice->invoice_date?->format('d/m/Y') ?: '—' }}</dd>
+                    <dt>Régime fiscal</dt><dd>{{ \App\Models\TaxRate::regimes()[$invoice->tax_regime] ?? '—' }}</dd>
+                </dl>
+            </div>
+        @endif
+    </section>
 
-    @if($documentType === 'Vente')
-        <table class="items"><thead><tr><th>Réf</th><th>Désignation</th><th>P.U HT</th><th>Qté</th><th>Unité</th><th>Montant HT</th></tr></thead><tbody>
-        @foreach(($invoice->delivery?->lines ?? []) as $line)
-            <tr><td>{{ $line['item_reference'] ?? '-' }}</td><td>{{ $line['item_name'] ?? '-' }}</td><td class="right">{{ number_format((float)($line['unit_price'] ?? 0),0,',',' ') }}</td><td>{{ $line['quantity'] ?? 0 }}</td><td>{{ $line['unit'] ?? 'pcs' }}</td><td class="right">{{ number_format((float)($line['quantity'] ?? 0)*(float)($line['unit_price'] ?? 0),0,',',' ') }}</td></tr>
-        @endforeach
-        </tbody></table>
-        <table class="totals"><tr><td>Total TTC</td><td class="right">{{ money((float)$invoice->amount) }}</td></tr></table>
+    @if($isSale)
+        @include('admin.print.sale-body', ['withNotes' => false, 'withPayments' => false])
     @else
-        <table class="items"><thead><tr><th>Description</th><th>Référence</th><th>Qté</th><th>Prix unitaire</th><th>Total</th></tr></thead><tbody>
-        @foreach(($invoice->extracted_data['items'] ?? []) as $item)
-            <tr><td>{{ $item['description'] ?? $item['name'] ?? '-' }}</td><td>{{ $item['reference'] ?? '-' }}</td><td>{{ $item['quantity'] ?? 1 }}</td><td class="right">{{ number_format((float)($item['unit_price'] ?? $item['amount'] ?? 0),0,',',' ') }} {{ $invoice->currency }}</td><td class="right">{{ number_format((float)($item['total'] ?? (($item['quantity'] ?? 1)*($item['unit_price'] ?? $item['amount'] ?? 0))),0,',',' ') }} {{ $invoice->currency }}</td></tr>
-        @endforeach
-        </tbody></table>
-        <table class="totals"><tr><td>Total HT</td><td class="right">{{ number_format((float)($invoice->total_ht ?? 0),0,',',' ') }} {{ $invoice->currency }}</td></tr><tr><td>Total TTC</td><td class="right">{{ number_format((float)($invoice->total_amount ?? 0),0,',',' ') }} {{ $invoice->currency }}</td></tr></table>
+        @include('admin.print.supplier-body', ['withNotes' => false])
     @endif
 
-    <div class="fne-box"><strong>DOCUMENT CERTIFIÉ ÉLECTRONIQUEMENT PAR LA FNE</strong><br>Référence FNE : {{ $invoice->fne_reference }}<br>Date de certification : {{ optional($invoice->fne_certified_at)->format('d/m/Y H:i') ?: '-' }}<br>Code de vérification : {{ $invoice->fne_token ?: '-' }}<br>Sticker / solde FNE : {{ $invoice->fne_balance_sticker ?? '-' }}</div>
-    <div class="verification">Conservez cette facture et utilisez la référence FNE pour toute vérification auprès de l'administration fiscale.</div>
-    <div class="footer"><span>{{ $company?->name ?: 'Diagoma ERP' }}<br>{{ data_get($company?->settings, 'address') ?: '-' }}</span><span>Référence FNE : {{ $invoice->fne_reference }}<br>Document certifié électroniquement</span></div>
-    <script>window.onload=function(){window.print();};</script>
-</body>
-</html>
+    <section class="certification">
+        <div class="certification__body">
+            <h3>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zm3.03 4.97a.75.75 0 0 0-1.06.02L7.47 7.9 6.03 6.47a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.08-.02l3-3.5a.75.75 0 0 0-.02-1.04z"/></svg>
+                DOCUMENT CERTIFIÉ ÉLECTRONIQUEMENT PAR LA FNE
+            </h3>
+            <dl>
+                <dt>Référence FNE</dt><dd>{{ $invoice->fne_reference }}</dd>
+                <dt>Date de certification</dt><dd>{{ $invoice->fne_certified_at?->format('d/m/Y à H:i') ?: '—' }}</dd>
+                @if($invoice->fne_token && ! $verificationUrl)<dt>Code de vérification</dt><dd>{{ $invoice->fne_token }}</dd>@endif
+                @if($verificationUrl)<dt>Vérification</dt><dd>{{ $verificationUrl }}</dd>@endif
+                @if($invoice->fne_balance_sticker !== null)<dt>Solde de stickers</dt><dd>{{ rtrim(rtrim(number_format((float) $invoice->fne_balance_sticker, 2, ',', ' '), '0'), ',') }}</dd>@endif
+            </dl>
+            <p>Conservez cette facture : sa référence FNE permet toute vérification auprès de l’administration fiscale.</p>
+        </div>
+        @if($verificationUrl)
+            <div class="certification__qr">
+                <div id="fneQr" data-url="{{ $verificationUrl }}"></div>
+                Scannez pour vérifier
+            </div>
+        @endif
+    </section>
+@endsection
+
+@if($verificationUrl)
+    @push('scripts')
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+        <script>
+            // QR code de l'adresse de vérification ; sans la bibliothèque, l'adresse reste lisible en clair.
+            (function () {
+                var target = document.getElementById('fneQr');
+                if (!target || typeof QRCode === 'undefined') { if (target) target.parentNode.style.display = 'none'; return; }
+                new QRCode(target, { text: target.dataset.url, width: 224, height: 224, colorDark: '#172033', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+            })();
+        </script>
+    @endpush
+@endif

@@ -86,6 +86,16 @@ class User extends Authenticatable
         return $this->role && strtolower($this->role->name) === strtolower($roleName);
     }
 
+    /**
+     * Personne de l'encadrement (administrateur, manager) : elle voit les chiffres
+     * de gestion (chiffre d'affaires, encaissements) que les écrans de terrain,
+     * comme la caisse, ne montrent pas au personnel.
+     */
+    public function isManager(): bool
+    {
+        return $this->hasRole('super_admin') || $this->hasRole('admin') || $this->hasRole('manager');
+    }
+
     public function hasPermission(string $module, string $ability = 'view'): bool
     {
         if ($this->hasRole('admin') || $this->hasRole('super_admin')) {

@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CommercialObjectiveAssignment extends Model
 {
     use BelongsToEntreprise;
-    protected $fillable = ['objective_id', 'employee_id', 'amount', 'starts_at', 'ends_at'];
+    protected $fillable = ['entreprise_id', 'objective_id', 'employee_id', 'amount', 'starts_at', 'ends_at'];
 
     protected $casts = ['amount' => 'decimal:2', 'starts_at' => 'date', 'ends_at' => 'date'];
 

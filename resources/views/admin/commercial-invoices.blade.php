@@ -19,6 +19,7 @@
         ['Certifiées FNE', $invoices->where('fne_status', 'certified')->count(), 'bi-patch-check', 'teal', 'sur ' . $invoices->count() . ' facture(s)'],
     ];
     $paymentInvoiceId = old('payment_invoice_id');
+    $cancelInvoiceId = old('cancel_invoice_id');
 @endphp
 
 <div class="dg-font dg-scope">
@@ -135,7 +136,13 @@
                                     <li><form method="POST" action="{{ route('admin.commercial.invoices.whatsapp', $invoice) }}">@csrf<button class="dropdown-item"><i class="bi bi-whatsapp"></i>Envoyer par WhatsApp</button></form></li>
                                     @if($invoice->status !== 'paid' && $invoice->status !== 'cancelled')
                                         <li><hr class="dropdown-divider"></li>
-                                        <li><form method="POST" action="{{ route('admin.commercial.invoices.cancel', $invoice) }}" onsubmit="return confirm('Annuler cette facture ?')">@csrf<button class="dropdown-item text-danger"><i class="bi bi-x-circle"></i>Annuler la facture</button></form></li>
+                                        <li>
+                                            <button type="button" class="dropdown-item text-danger" data-bs-toggle="modal" data-bs-target="#cancelInvoiceModal"
+                                                data-cancel-invoice="{{ $invoice->id }}"
+                                                data-action="{{ route('admin.commercial.invoices.cancel', $invoice) }}"
+                                                data-label="Facture N° {{ $invoice->id }} · {{ $invoice->client_name }}"
+                                                data-amount-label="{{ money((float) $invoice->amount) }}"><i class="bi bi-x-circle"></i>Annuler la facture</button>
+                                        </li>
                                     @endif
                                 </ul>
                             </div>
@@ -220,6 +227,38 @@
             </div>
         </div>
     </div>
+    {{-- Annulation : le motif est obligatoire, un avoir total est émis et la facture reste dans l'historique. --}}
+    <div class="modal fade dg-tone-red" id="cancelInvoiceModal" tabindex="-1" aria-labelledby="cancelInvoiceModalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="POST" id="cancelInvoiceForm" action="{{ $cancelInvoiceId ? route('admin.commercial.invoices.cancel', $cancelInvoiceId) : '#' }}">
+                    @csrf
+                    <input type="hidden" name="cancel_invoice_id" id="cancelInvoiceId" value="{{ $cancelInvoiceId }}">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="cancelInvoiceModalTitle"><i class="bi bi-x-circle me-2"></i>Annuler la facture</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="sales-cancel-summary mb-4">
+                            <span class="dg-tile dg-tile--sm dg-tone-red"><i class="bi bi-receipt"></i></span>
+                            <span class="flex-grow-1">
+                                <span class="d-block fw-semibold" id="cancelInvoiceLabel"></span>
+                                <span class="d-block dg-muted" style="font-size:13px">Un avoir total de ce montant sera émis ; la facture reste dans l’historique.</span>
+                            </span>
+                            <strong class="sales-cancel-summary__amount" id="cancelInvoiceAmount"></strong>
+                        </div>
+                        <label class="form-label" for="cancelReason">Motif de l’annulation</label>
+                        <textarea id="cancelReason" name="reason" class="form-control" rows="3" minlength="5" maxlength="500" required placeholder="Ex : commande annulée par le client">{{ old('reason') }}</textarea>
+                        <div class="form-text">5 caractères minimum. Le motif figure sur l’avoir.</div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Retour</button>
+                        <button class="btn btn-danger"><i class="bi bi-x-circle me-1"></i>Annuler la facture</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 </div>
 
 <style>
@@ -229,6 +268,8 @@
     .dg-scope .sales-invoices-table > tbody > tr > td { padding-left: 12px !important; padding-right: 12px !important; }
     .sales-payment-summary { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--dg-radius); background: rgba(5, 150, 105, .08); border: 1px solid rgba(5, 150, 105, .25); }
     .sales-payment-summary__amount { font-size: 17px; color: #059669; white-space: nowrap; }
+    .sales-cancel-summary { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--dg-radius); background: rgba(220, 38, 38, .06); border: 1px solid rgba(220, 38, 38, .22); }
+    .sales-cancel-summary__amount { font-size: 17px; color: #dc2626; white-space: nowrap; }
 </style>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -313,6 +354,28 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         toggleAccounts();
     });
+
+    // Fenêtre d'annulation unique, remplie à partir de la ligne choisie.
+    const cancelModal = document.getElementById('cancelInvoiceModal');
+    cancelModal.addEventListener('show.bs.modal', function (event) {
+        const trigger = event.relatedTarget;
+        if (!trigger || !trigger.dataset.cancelInvoice) return;
+        document.getElementById('cancelInvoiceForm').action = trigger.dataset.action;
+        document.getElementById('cancelInvoiceId').value = trigger.dataset.cancelInvoice;
+        document.getElementById('cancelInvoiceLabel').textContent = trigger.dataset.label;
+        document.getElementById('cancelInvoiceAmount').textContent = trigger.dataset.amountLabel;
+        if (!trigger.dataset.reopen) document.getElementById('cancelReason').value = '';
+    });
+
+    @if($cancelInvoiceId && $errors->any())
+        window.addEventListener('load', function () {
+            const trigger = document.querySelector('[data-cancel-invoice="{{ (int) $cancelInvoiceId }}"]');
+            if (!trigger) return;
+            trigger.dataset.reopen = '1';
+            bootstrap.Modal.getOrCreateInstance(cancelModal).show(trigger);
+            delete trigger.dataset.reopen;
+        });
+    @endif
 
     @if($paymentInvoiceId && $errors->any())
         window.addEventListener('load', function () {

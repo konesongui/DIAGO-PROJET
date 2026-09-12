@@ -1,61 +1,102 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Facture personnalisée {{ $invoice->reference }}</title>
+@extends('admin.print.layout')
+
+@php
+    $state = $invoice->state();
+    [$stateLabel, $stateTone] = \App\Models\CustomInvoice::states()[$state];
+    $isDraft = ! $invoice->issued_at;
+
+    // Totaux : lignes et forfaits HT, remise, HT net (base de la TVA), TVA et TTC portés par la facture.
+    $grossHt = (float) $invoice->total_ht;
+    $discount = (float) $invoice->total_discount;
+    $netHt = (float) ($invoice->subtotal_after_discount ?: max(0, $grossHt - $discount));
+    $credited = (float) $invoice->credited_amount;
+    $creditNotes = $invoice->creditNotes;
+    $plannedMethod = ['cash' => 'Espèces', 'bank' => 'Banque'][$invoice->payment_method] ?? $invoice->payment_method;
+
+    $settings = $company?->settings ?? [];
+    $bankDetails = collect([data_get($settings, 'bank_name'), data_get($settings, 'bank_account') ? 'compte n° ' . data_get($settings, 'bank_account') : null])->filter()->implode(', ');
+@endphp
+
+@section('title', 'Facture ' . $invoice->reference)
+@section('doc-title', 'FACTURE')
+
+@section('doc-meta')
+    <p class="number">N° {{ $invoice->reference }}</p>
+    <p>Date : {{ ($invoice->quote_date ?? $invoice->created_at)?->format('d/m/Y') ?: '—' }}@if($invoice->valid_until) · échéance le {{ $invoice->valid_until->format('d/m/Y') }}@endif</p>
+    <span class="pill pill--{{ $state === 'draft' ? 'warning' : $stateTone }}">{{ $state === 'draft' ? 'Brouillon, non émise' : $stateLabel . ($isDraft ? ', non émise' : '') }}</span>
+@endsection
+
+@section('content')
+    @if($isDraft)
+        {{-- Un brouillon imprimé ne doit pas pouvoir passer pour la facture définitive. --}}
+        <div class="draft-mark" aria-hidden="true">BROUILLON</div>
+    @endif
+
+    <section class="parties">
+        <div class="box box--accent">
+            <h2>Client</h2>
+            <strong>{{ $invoice->client_name ?: 'Client' }}</strong>
+            @if($invoice->client_phone || $invoice->client_email)
+                <p>{{ collect([$invoice->client_phone ? 'Tél : ' . $invoice->client_phone : null, $invoice->client_email])->filter()->implode(' · ') }}</p>
+            @endif
+            @if($invoice->delivery_location)<p>Livraison : {{ $invoice->delivery_location }}</p>@endif
+        </div>
+        <div class="box">
+            <h2>Références</h2>
+            <dl>
+                @if($invoice->subject)<dt>Objet</dt><dd>{{ $invoice->subject }}</dd>@endif
+                <dt>Mode de règlement</dt><dd>{{ $plannedMethod ?: '—' }}</dd>
+                @if($invoice->issued_at)<dt>Émise le</dt><dd>{{ $invoice->issued_at->format('d/m/Y') }}</dd>@endif
+            </dl>
+        </div>
+    </section>
+
+    @include('admin.print.item-lines', ['lines' => $invoice->documentLines()])
+
+    <section class="summary">
+        <div class="notes">
+            @if($invoice->payment_terms)
+                <h3>Conditions de règlement</h3>
+                <p>{{ $invoice->payment_terms }}</p>
+            @endif
+            @if($invoice->delivery_terms)
+                <h3>Conditions de livraison</h3>
+                <p>{{ $invoice->delivery_terms }}</p>
+            @endif
+            @if($bankDetails && $state !== 'cancelled')
+                <h3>Règlement par virement</h3>
+                <p>{{ $bankDetails }}</p>
+            @endif
+            @if($creditNotes->isNotEmpty())
+                <h3>Avoirs émis sur cette facture</h3>
+                @foreach($creditNotes as $note)
+                    <p>{{ $note->reference }} du {{ $note->created_at->format('d/m/Y') }} : − {{ money((float) $note->total_ttc) }}<br>{{ $note->reason }}</p>
+                @endforeach
+            @endif
+        </div>
+        <table class="totals">
+            @if($discount > 0)
+                <tr><td>Total HT brut</td><td>{{ money($grossHt) }}</td></tr>
+                <tr><td>Remise</td><td>− {{ money($discount) }}</td></tr>
+            @endif
+            <tr><td>Total HT</td><td>{{ money($netHt) }}</td></tr>
+            <tr><td>{{ $invoice->taxLabel() }}</td><td>{{ money((float) $invoice->tax_amount) }}</td></tr>
+            <tr class="grand"><td>Total TTC</td><td>{{ money((float) $invoice->total_ttc) }}</td></tr>
+            @if($credited > 0)
+                <tr class="sep"><td>Avoirs</td><td>− {{ money($credited) }}</td></tr>
+                <tr><td>Net dû</td><td>{{ money($invoice->amountDue()) }}</td></tr>
+            @endif
+            <tr class="{{ $credited > 0 ? '' : 'sep' }}"><td>Déjà payé</td><td>{{ money((float) $invoice->paid_amount) }}</td></tr>
+            @if($state !== 'cancelled')
+                <tr class="due"><td>Reste à payer</td><td>{{ money($invoice->remainingAmount()) }}</td></tr>
+            @endif
+        </table>
+    </section>
+@endsection
+
+@push('scripts')
     <style>
-        body { font-family: Arial, sans-serif; color: #1f2937; margin: 40px; }
-        .header { display: flex; justify-content: space-between; margin-bottom: 30px; }
-        .title { font-size: 28px; font-weight: bold; }
-        .meta { width: 260px; font-size: 13px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #d1d5db; padding: 10px; text-align: left; }
-        th { background: #f3f4f6; }
-        .totals { margin-top: 30px; width: 320px; margin-left: auto; }
-        .totals div { display: flex; justify-content: space-between; margin-bottom: 8px; }
-        .total-row { font-weight: bold; font-size: 18px; }
+        /* Au-dessus du contenu, très pâle : le fond des lignes du tableau ne le masque pas. */
+        .draft-mark { position: absolute; top: 44%; left: 50%; z-index: 2; transform: translate(-50%, -50%) rotate(-28deg); font-size: 96px; font-weight: 700; letter-spacing: .12em; color: rgba(217, 119, 6, .07); pointer-events: none; white-space: nowrap; }
     </style>
-</head>
-<body>
-    <div class="header">
-        <div>
-            <div class="title">Facture personnalisée</div>
-            <div><strong>Référence :</strong> {{ $invoice->reference }}</div>
-        </div>
-        <div class="meta">
-            <div><strong>Date :</strong> {{ optional($invoice->quote_date)->format('d/m/Y') ?: '-' }}</div>
-            <div><strong>Échéance :</strong> {{ optional($invoice->valid_until)->format('d/m/Y') ?: '-' }}</div>
-            <div><strong>Client :</strong> {{ $invoice->client_name ?: 'Client' }}</div>
-        </div>
-    </div>
-
-    <table>
-        <thead>
-            <tr>
-                <th>Article</th>
-                <th>Qté</th>
-                <th>PU</th>
-                <th>Total</th>
-            </tr>
-        </thead>
-        <tbody>
-        @foreach($invoice->items ?? [] as $item)
-            <tr>
-                <td>{{ $item['item_name'] ?? 'Article' }}</td>
-                <td>{{ $item['quantity'] ?? 0 }}</td>
-                <td>{{ number_format((float) ($item['price'] ?? 0), 0, ',', ' ') }} CFA</td>
-                <td>{{ number_format(((float) ($item['quantity'] ?? 0)) * ((float) ($item['price'] ?? 0)), 0, ',', ' ') }} CFA</td>
-            </tr>
-        @endforeach
-        </tbody>
-    </table>
-
-    <div class="totals">
-        <div><span>Total HT</span><span>{{ number_format($invoice->total_ht, 0, ',', ' ') }} CFA</span></div>
-        <div><span>Remise</span><span>{{ number_format($invoice->total_discount, 0, ',', ' ') }} CFA</span></div>
-        <div><span>TVA</span><span>{{ number_format($invoice->tax_amount, 0, ',', ' ') }} CFA</span></div>
-        <div class="total-row"><span>Total TTC</span><span>{{ number_format($invoice->total_ttc, 0, ',', ' ') }} CFA</span></div>
-    </div>
-</body>
-</html>
+@endpush

@@ -69,10 +69,11 @@ class VatDeclarationService
     {
         $rows = collect();
 
-        // Factures de vente : emises des la validation de la livraison.
+        // Factures de vente : emises des la validation de la livraison. Une
+        // facture annulee reste comptee : son avoir la deduit a sa propre date.
         CommercialInvoice::withoutGlobalScope('entreprise')
             ->where('entreprise_id', $entrepriseId)
-            ->where('status', '!=', 'cancelled')
+            ->countedInSales()
             ->whereBetween(DB::raw('COALESCE(issued_at, created_at)'), [$from, $to])
             ->get()
             ->each(fn ($i) => $rows->push($this->row('Factures de vente', $i->total_ht, $i->tax_amount, $i->tax_rate, $i->tax_regime)));
@@ -224,7 +225,7 @@ class VatDeclarationService
         $unknown = ['label' => 'Documents sans régime fiscal renseigné', 'count' => 0, 'tax' => 0.0];
 
         $unknown['count'] += CommercialInvoice::withoutGlobalScope('entreprise')
-            ->where('entreprise_id', $entrepriseId)->where('status', '!=', 'cancelled')
+            ->where('entreprise_id', $entrepriseId)->countedInSales()
             ->whereBetween(DB::raw('COALESCE(issued_at, created_at)'), [$from, $to])
             ->where(fn ($q) => $q->whereNull('tax_regime')->orWhere('tax_regime', 'unknown'))
             ->count();

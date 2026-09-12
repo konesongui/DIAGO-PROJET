@@ -1096,6 +1096,7 @@ body.dg-app { font-family: var(--dg-font); }
 .dg-scope .modal-content { overflow: hidden; border: 0; border-radius: var(--dg-radius-lg); font-family: var(--dg-font); color: var(--dg-text); }
 .dg-scope .modal-header { padding: 18px 24px; border-bottom: 0; background: var(--dg-tone, var(--dg-navy)) !important; }
 .dg-scope .modal-title { font-size: 17px; font-weight: 600; color: #fff !important; }
+.dg-scope .modal-title .bi { color: #fff !important; }
 .dg-scope .modal-header .text-muted { color: rgba(255, 255, 255, .78) !important; }
 .dg-scope .modal-header .btn-close { filter: invert(1) grayscale(1) brightness(2); opacity: .85; }
 .dg-scope .modal-body .table > thead > tr > th { background: var(--dg-neutral-bg) !important; color: var(--dg-navy) !important; }

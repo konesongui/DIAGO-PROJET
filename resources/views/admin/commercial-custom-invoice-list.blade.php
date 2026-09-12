@@ -1,293 +1,210 @@
 @extends('admin.layout')
 
 @section('content')
-<div class="d-flex justify-content-between align-items-center mb-5 flex-wrap gap-3">
-    <div>
-        <div class="text-uppercase text-muted fs-8 fw-bold">Commercial</div>
-        <h2 class="fs-2 fw-bold mb-1">{{ $title ?? 'Facture personnalisée' }}</h2>
-        <p class="text-muted mb-0">{{ $subtitle ?? 'Suivi des factures personnalisées et leur statut.' }}</p>
+@php
+    // État lisible, déduit des montants et des dates (voir CustomInvoice::state()).
+    $dueOf = fn ($invoice) => $invoice->amountDue();
+    $remainingOf = fn ($invoice) => $invoice->remainingAmount();
+    $stateOf = fn ($invoice) => $invoice->state();
+    $states = \App\Models\CustomInvoice::states();
+    $byState = $invoices->groupBy($stateOf);
+    $issued = $invoices->filter(fn ($invoice) => $invoice->issued_at && $stateOf($invoice) !== 'cancelled');
+    $toCollect = $invoices->filter(fn ($invoice) => in_array($stateOf($invoice), ['issued', 'partial'], true));
+    $stats = [
+        ['Montant facturé', money((float) $issued->sum($dueOf)), 'bi-receipt', 'blue', 'factures émises, net des avoirs'],
+        ['Encaissé', money((float) $invoices->sum(fn ($i) => (float) $i->paid_amount)), 'bi-arrow-down-left-circle', 'green', 'paiements reçus'],
+        ['Reste à encaisser', money((float) $toCollect->sum($remainingOf)), 'bi-hourglass-split', 'red', $toCollect->count() . ' facture(s) émise(s)'],
+        ['Brouillons', $byState->get('draft', collect())->count(), 'bi-pencil-square', 'orange', 'à émettre au client'],
+    ];
+@endphp
+
+<div class="dg-font dg-scope">
+    <x-dg.page-header :title="$title" :subtitle="$subtitle" :back="route('admin.commercial')" back-label="Commercial">
+        <x-slot:actions>
+            <a href="{{ route('admin.commercial.custom-invoice.create') }}" class="dg-btn dg-btn--primary"><i class="bi bi-plus-lg"></i>Nouvelle facture</a>
+        </x-slot:actions>
+    </x-dg.page-header>
+
+    @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
+    @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
+
+    <div class="dg-kpi-grid">
+        @foreach($stats as [$label, $value, $icon, $color, $hint])
+            <x-dg.kpi :label="$label" :value="$value" :icon="$icon" :color="$color" :hint="$hint" />
+        @endforeach
     </div>
-    <div class="d-flex gap-2">
-        <a href="{{ route('admin.commercial') }}" class="btn btn-light">Retour</a>
-        <a href="{{ route('admin.commercial.custom-invoice.create') }}" class="btn btn-primary"><i class="ki-duotone ki-plus fs-2 me-2"></i>Nouvelle facture</a>
-    </div>
-</div>
 
-@if(session('success'))
-    <div class="alert alert-success">{{ session('success') }}</div>
-@endif
-@if($errors->any())
-    <div class="alert alert-danger">{{ $errors->first() }}</div>
-@endif
-
-<div class="card border-0 shadow-sm">
-    <div class="card-header border-0 bg-transparent px-4 pt-4 pb-0">
-    <div class="d-flex flex-column flex-xl-row justify-content-between align-items-center gap-3 w-100">
-        <div class="d-flex align-items-center gap-3 flex-grow-1 w-100">
-            <div class="position-relative flex-grow-1">
-                <span class="svg-icon svg-icon-2 position-absolute top-50 start-0 translate-middle-y ms-4 text-muted">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
-                        <rect opacity="0.5" x="17.0365" y="15.1223" width="8.15546" height="2" rx="1" transform="rotate(45 17.0365 15.1223)" fill="currentColor"/>
-                        <path d="M11 19C6.55556 19 3 15.4444 3 11C3 6.55556 6.55556 3 11 3C15.4444 3 19 6.55556 19 11C19 15.4444 15.4444 19 11 19ZM11 5C7.68629 5 5 7.68629 5 11C5 14.3137 7.68629 17 11 17C14.3137 17 17 14.3137 17 11C17 7.68629 14.3137 5 11 5Z" fill="currentColor"/>
-                    </svg>
-                </span>
-                <input type="search" class="form-control form-control-lg border-0 bg-light rounded-pill ps-12" placeholder="Search Customers" aria-label="Rechercher une facture" id="customInvoiceSearch" style="min-height: 62px; font-size: 1.1rem;" />
-            </div>
-
-            <div class="btn-group">
-                <button type="button" class="btn btn-light-info px-6 py-4 fw-bold text-primary rounded-2" style="background: #e6f1ff; min-width: 170px; min-height: 62px;" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="ki-duotone ki-filter fs-2 me-2"></i> Filtrer
-                </button>
-                <div class="dropdown-menu dropdown-menu-end p-4" style="min-width: 320px;">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold text-muted mb-2">Statut</label>
-                        <select class="form-select form-select-solid" id="customInvoiceStatusFilter" aria-label="Filtrer par statut">
-                            <option value="">Tous les statuts</option>
-                            <option value="En attente">En attente</option>
-                            <option value="Paiement partiel">Paiement partiel</option>
-                            <option value="Payée">Payée</option>
-                        </select>
-                    </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-6">
-                            <label class="form-label fw-semibold text-muted mb-2">Du</label>
-                            <input type="date" class="form-control form-control-solid" id="customInvoiceDateStart" aria-label="Date de début">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label fw-semibold text-muted mb-2">Au</label>
-                            <input type="date" class="form-control form-control-solid" id="customInvoiceDateEnd" aria-label="Date de fin">
-                        </div>
-                    </div>
-                    <div class="d-flex justify-content-end gap-2">
-                        <button type="button" class="btn btn-light btn-sm" id="resetCustomInvoiceFilters">Réinitialiser</button>
-                        <button type="button" class="btn btn-primary btn-sm" data-bs-dismiss="dropdown">Appliquer</button>
-                    </div>
+    <div class="dg-card dg-card--table">
+        <div class="dg-card__header flex-wrap">
+            <h2 class="dg-card__title"><span class="dg-tile dg-tile--sm dg-tone-purple"><i class="bi bi-receipt-cutoff"></i></span>Factures personnalisées</h2>
+            <div class="d-flex flex-wrap align-items-center gap-2" role="search" aria-label="Filtrer les factures">
+                <label class="dg-search" style="max-width:240px">
+                    <i class="bi bi-search" aria-hidden="true"></i>
+                    <input id="customInvoiceSearch" type="search" placeholder="Référence…" aria-label="Rechercher une facture">
+                </label>
+                <div class="dg-period">
+                    <input id="customInvoiceDateStart" type="date" class="dg-input" aria-label="Du">
+                    <span class="dg-period__sep">au</span>
+                    <input id="customInvoiceDateEnd" type="date" class="dg-input" aria-label="Au">
                 </div>
             </div>
-
-            <a href="{{ route('admin.commercial.custom-invoice.create') }}" class="btn btn-primary px-6 py-4 fw-bold rounded-2" style="min-height: 62px;">Nouvelle facture</a>
         </div>
-    </div>
-</div>
-<div class="card-body px-4 pb-4">
+
+        @if($invoices->isNotEmpty())
+            <div class="dg-tabs mb-4" role="group" aria-label="Filtrer par état">
+                <button type="button" class="dg-tab is-active" data-state-filter="" aria-pressed="true">Toutes ({{ $invoices->count() }})</button>
+                @foreach($states as $value => [, , , $tabLabel])
+                    <button type="button" class="dg-tab" data-state-filter="{{ $value }}" aria-pressed="false">{{ $tabLabel }} ({{ $byState->get($value, collect())->count() }})</button>
+                @endforeach
+            </div>
+        @endif
+
         <div class="table-responsive">
-        <table class="table align-middle table-row-dashed table-row-gray-300 gy-6" id="customInvoiceTable">
-            <thead>
-                <tr class="text-muted text-uppercase fs-7 fw-bold">
-                    <th>Client</th>
-                    <th>Date</th>
-                    <th>Mode de paiement</th>
-                    <th class="text-end">Total HT</th>
-                    <th class="text-end">Montant payé</th>
-                    <th class="text-end">Reste à payer</th>
-                    <th class="text-end">Total TTC</th>
-                    <th>Statut</th>
-                    <th class="text-end">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-            @forelse($invoices as $invoice)
-                @php
-                    $paidAmount = (float) ($invoice->paid_amount ?? 0);
-                    $totalTtc = (float) ($invoice->total_ttc ?? 0);
-                    $remainingAmount = max(0, $totalTtc - $paidAmount);
-                    $statusClass = $paidAmount >= $totalTtc ? 'success' : ($paidAmount > 0 ? 'warning' : 'secondary');
-                    $statusLabel = $paidAmount >= $totalTtc ? 'Payée' : ($paidAmount > 0 ? 'Paiement partiel' : 'En attente');
-                    $invoiceDate = $invoice->quote_date ?? $invoice->created_at;
-                @endphp
-                <tr data-status="{{ $statusLabel }}" data-date="{{ $invoiceDate ? \Carbon\Carbon::parse($invoiceDate)->format('Y-m-d') : '' }}">
-                    <td>{{ $invoice->client_name ?: 'Client' }}</td>
-                    <td>{{ optional($invoice->quote_date)->translatedFormat('d/m/Y') ?: '-' }}</td>
-                    <td>{{ $invoice->payment_method ?: $invoice->cash_payment_method ?: '-' }}</td>
-                    <td class="text-end fw-bold text-nowrap">{{ number_format($invoice->total_ht, 0, ',', ' ') }} XOF</td>
-                    <td class="text-end fw-bold text-nowrap">{{ number_format($paidAmount, 0, ',', ' ') }} XOF</td>
-                    <td class="text-end fw-bold text-nowrap">{{ number_format($remainingAmount, 0, ',', ' ') }} XOF</td>
-                    <td class="text-end fw-bold text-nowrap">{{ number_format($totalTtc, 0, ',', ' ') }} XOF</td>
-                    <td>
-                        <span class="badge badge-light-{{ $statusClass }}">{{ $statusLabel }}</span>
-                    </td>
-                    <td class="text-end">
-                        <div class="dropdown">
-                            <button class="btn btn-sm btn-light btn-active-light-primary" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="ki-duotone ki-dots fs-3"></i>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li><a class="dropdown-item" href="{{ route('admin.commercial.custom-invoice.show', $invoice) }}">Voir</a></li>
-                                <li><a class="dropdown-item" href="{{ route('admin.commercial.custom-invoice.edit', $invoice) }}">Modifier</a></li>
-                                <li>
-                                    <form method="POST" action="{{ route('admin.commercial.custom-invoice.destroy', $invoice) }}" onsubmit="return confirm('Supprimer cette facture ?')">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="dropdown-item text-danger" {{ (float) $invoice->paid_amount > 0 || !empty($invoice->paid_at) ? 'disabled' : '' }}>Supprimer</button>
-                                    </form>
-                                </li>
-                                <li>
-                                    <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#paymentModal-{{ $invoice->id }}">Paiement</button>
-                                </li>
-                                <li>
-                                    <form method="POST" action="{{ route('admin.commercial.custom-invoice.email', $invoice) }}">
-                                        @csrf
-                                        <button type="submit" class="dropdown-item">Envoyer facture par email</button>
-                                    </form>
-                                </li>
-                                <li>
-                                    <form method="POST" action="{{ route('admin.commercial.custom-invoice.whatsapp', $invoice) }}" onsubmit="return confirm('Souhaitez-vous envoyer cette facture par WhatsApp ?');">
-                                        @csrf
-                                        <button type="submit" class="dropdown-item text-success">Envoyer facture par WhatsApp</button>
-                                    </form>
-                                </li>
-                                <li><a class="dropdown-item" href="{{ route('admin.commercial.custom-invoice.print', $invoice) }}" target="_blank">Imprimer facture</a></li>
-                                <li>
-                                    <form method="POST" action="{{ route('admin.commercial.custom-invoice.duplicate', $invoice) }}">
-                                        @csrf
-                                        <button type="submit" class="dropdown-item">Dupliquer facture</button>
-                                    </form>
-                                </li>
-                            </ul>
-                        </div>
-                    </td>
-                </tr>
+            <table class="table align-middle mb-0 custom-invoices-table" id="customInvoiceTable">
+                <thead>
+                    <tr>
+                        <th>Facture</th>
+                        <th>Client</th>
+                        <th class="text-end">Montant TTC</th>
+                        <th class="text-end">Reste à payer</th>
+                        <th>Statut</th>
+                        <th class="text-end"><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                @forelse($invoices as $invoice)
+                    @php
+                        $state = $stateOf($invoice);
+                        [$stateLabel, $stateTone, $stateIcon] = $states[$state];
+                        $remaining = $remainingOf($invoice);
+                        $locked = app(\App\Services\InvoiceIntegrityService::class)->isLocked($invoice);
+                        $invoiceDate = $invoice->quote_date ?? $invoice->created_at;
+                    @endphp
+                    <tr data-state="{{ $state }}" data-date="{{ $invoiceDate?->format('Y-m-d') }}">
+                        <td class="text-nowrap">
+                            <a href="{{ route('admin.commercial.custom-invoice.show', $invoice) }}" class="d-block fw-semibold text-reset text-decoration-none">{{ $invoice->reference ?: 'N° ' . $invoice->id }}</a>
+                            <span class="d-block dg-muted" style="font-size:12.5px">{{ $invoiceDate?->format('d/m/Y') ?: '—' }}{{ $invoice->issued_at ? ' · émise le ' . $invoice->issued_at->format('d/m/Y') : '' }}</span>
+                        </td>
+                        <td>
+                            <span class="d-block fw-semibold">{{ $invoice->client_name ?: 'Client' }}</span>
+                            <span class="d-block dg-muted" style="font-size:12.5px">{{ collect([$invoice->client_phone, $invoice->client_email])->filter()->implode(' · ') ?: ($invoice->subject ?: '—') }}</span>
+                        </td>
+                        <td class="text-end">
+                            <span class="d-block dg-cell-num">{{ money((float) $invoice->total_ttc) }}</span>
+                            <span class="d-block dg-muted text-nowrap" style="font-size:12.5px">payé : {{ money((float) $invoice->paid_amount) }}</span>
+                        </td>
+                        @if($state === 'cancelled')
+                            <td class="text-end dg-muted">—</td>
+                        @else
+                            <td class="text-end dg-cell-num {{ $remaining > 0 ? 'dg-amount-negative' : 'dg-amount-positive' }}">{{ money($remaining) }}</td>
+                        @endif
+                        <td>
+                            <span class="dg-badge dg-badge--{{ $stateTone }}"><i class="bi {{ $stateIcon }}"></i>{{ $stateLabel }}</span>
+                            @if((float) $invoice->credited_amount > 0 && $state !== 'cancelled')
+                                <span class="d-block dg-muted mt-1" style="font-size:12px">avoir : {{ money((float) $invoice->credited_amount) }}</span>
+                            @endif
+                        </td>
+                        <td class="text-end">
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-light action-menu-button" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Actions" aria-label="Actions pour la facture {{ $invoice->reference }}"></button>
+                                <ul class="dropdown-menu dropdown-menu-end dg-dropdown">
+                                    <li><a class="dropdown-item" href="{{ route('admin.commercial.custom-invoice.show', $invoice) }}"><i class="bi bi-eye"></i>Voir la facture</a></li>
+                                    @if(! $locked)
+                                        <li><a class="dropdown-item" href="{{ route('admin.commercial.custom-invoice.edit', $invoice) }}"><i class="bi bi-pencil"></i>Modifier</a></li>
+                                    @endif
+                                    @if(! $invoice->issued_at && $state !== 'cancelled')
+                                        <li><form method="POST" action="{{ route('admin.commercial.custom-invoice.issue', $invoice) }}" onsubmit="return confirm('Émettre cette facture ? Elle ne pourra plus être modifiée : une correction passera par un avoir.')">@csrf<button class="dropdown-item"><i class="bi bi-send-check"></i>Émettre la facture</button></form></li>
+                                    @endif
+                                    @if($remaining > 0 && $state !== 'cancelled')
+                                        <li>
+                                            <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#paymentModal"
+                                                data-payment-invoice="{{ $invoice->id }}"
+                                                data-action="{{ route('admin.commercial.custom-invoice.payment', $invoice) }}"
+                                                data-label="{{ $invoice->reference }} · {{ $invoice->client_name }}"
+                                                data-remaining="{{ number_format($remaining, 2, '.', '') }}"
+                                                data-remaining-label="{{ money($remaining) }}"><i class="bi bi-cash-coin"></i>Enregistrer un paiement</button>
+                                        </li>
+                                    @endif
+                                    <li><a class="dropdown-item" target="_blank" href="{{ route('admin.commercial.custom-invoice.print', $invoice) }}"><i class="bi bi-printer"></i>Imprimer</a></li>
+                                    <li><form method="POST" action="{{ route('admin.commercial.custom-invoice.email', $invoice) }}">@csrf<button class="dropdown-item"><i class="bi bi-envelope"></i>Envoyer par e-mail</button></form></li>
+                                    <li><form method="POST" action="{{ route('admin.commercial.custom-invoice.whatsapp', $invoice) }}">@csrf<button class="dropdown-item"><i class="bi bi-whatsapp"></i>Envoyer par WhatsApp</button></form></li>
+                                    <li><form method="POST" action="{{ route('admin.commercial.custom-invoice.duplicate', $invoice) }}">@csrf<button class="dropdown-item"><i class="bi bi-copy"></i>Dupliquer</button></form></li>
+                                    @if(! $locked)
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><form method="POST" action="{{ route('admin.commercial.custom-invoice.destroy', $invoice) }}" onsubmit="return confirm('Supprimer cette facture ?')">@csrf @method('DELETE')<button class="dropdown-item text-danger"><i class="bi bi-trash"></i>Supprimer</button></form></li>
+                                    @endif
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="6" class="p-5">
+                            <div class="dg-chart-empty" style="min-height:220px">
+                                <span class="dg-tile dg-tone-purple"><i class="bi bi-receipt-cutoff"></i></span>
+                                <div><strong>Aucune facture personnalisée</strong>Une facture sur mesure, sans devis ni livraison : lignes libres, forfaits du catalogue et paiement.</div>
+                                <a href="{{ route('admin.commercial.custom-invoice.create') }}" class="dg-btn dg-btn--primary dg-btn--sm"><i class="bi bi-plus-lg"></i>Nouvelle facture</a>
+                            </div>
+                        </td>
+                    </tr>
+                @endforelse
+                </tbody>
+            </table>
+        </div>
 
-                <div class="modal fade" id="paymentModal-{{ $invoice->id }}" tabindex="-1" aria-hidden="true">
-                    <div class="modal-dialog modal-dialog-centered">
-                        <div class="modal-content">
-                            <form method="POST" action="{{ route('admin.commercial.custom-invoice.payment', $invoice) }}">
-                                @csrf
-                                <div class="modal-header">
-                                    <h5 class="modal-title">Enregistrer un paiement</h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <div class="mb-3">
-                                        <label class="form-label">Montant à payer</label>
-                                        <input type="number" name="amount" class="form-control" min="0" step="0.01" max="{{ max(0, (float) $invoice->total_ttc - (float) $invoice->paid_amount) }}" value="{{ number_format(max(0, (float) $invoice->total_ttc - (float) $invoice->paid_amount), 2, '.', '') }}" required>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">Mode de paiement</label>
-                                        <select name="payment_method" class="form-select payment-method" data-target="payment-account-{{ $invoice->id }}" required>
-                                            <option value="">Sélectionner...</option>
-                                            <option value="cash">Espèces</option>
-                                            <option value="bank">Banque</option>
-                                        </select>
-                                    </div>
-                                    <div id="payment-account-{{ $invoice->id }}" class="mt-3">
-                                        <div class="cash-account-field d-none">
-                                            <label class="form-label">Caisse</label>
-                                            <select name="cash_account_id" class="form-select cash-account-select" disabled>
-                                                <option value="">Sélectionner une caisse...</option>
-                                                @foreach(App\Models\CashAccount::where('entreprise_id', auth()->user()->entreprise_id)->where('is_active', true)->orderBy('name')->get() as $account)
-                                                    <option value="{{ $account->id }}">{{ $account->name }}</option>
-                                                @endforeach
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Annuler</button>
-                                    <button type="submit" class="btn btn-primary">Enregistrer</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            @empty
-                <tr>
-                    <td colspan="9" class="text-center text-muted py-10">Aucune facture personnalisée enregistrée.</td>
-                </tr>
-            @endforelse
-            </tbody>
-        </table>
+        {{-- Hors du tableau : une ligne fusionnée dans le tbody empêcherait DataTables de s'initialiser. --}}
+        <div class="dg-chart-empty mt-4 d-none" id="customInvoicesNoResult" style="min-height:160px">
+            <span class="dg-tile dg-tone-purple"><i class="bi bi-search"></i></span>
+            <div><strong>Aucune facture ne correspond à vos filtres</strong>Modifiez la recherche, la période ou l’état.</div>
         </div>
     </div>
+
+    @include('admin.partials.custom-invoice-payment-modal')
 </div>
- 
-@push('scripts')
+
+<style>
+    .custom-invoices-table { min-width: 860px; }
+    .custom-invoices-table td:nth-child(2) { min-width: 160px; }
+    .dg-scope .custom-invoices-table > thead > tr > th,
+    .dg-scope .custom-invoices-table > tbody > tr > td { padding-left: 12px !important; padding-right: 12px !important; }
+</style>
 <script>
-    const searchInput = document.getElementById('customInvoiceSearch');
-    const statusFilter = document.getElementById('customInvoiceStatusFilter');
-    const dateStartInput = document.getElementById('customInvoiceDateStart');
-    const dateEndInput = document.getElementById('customInvoiceDateEnd');
-
-    function filterCustomInvoices() {
-        const search = (searchInput?.value || '').toLowerCase();
-        const status = statusFilter?.value || '';
-        const dateStart = dateStartInput?.value || '';
-        const dateEnd = dateEndInput?.value || '';
-
-        document.querySelectorAll('#customInvoiceTable tbody tr[data-status]').forEach((row) => {
+document.addEventListener('DOMContentLoaded', function () {
+    // Filtres : recherche, période et état.
+    const rows = Array.from(document.querySelectorAll('#customInvoiceTable tbody tr[data-state]'));
+    const search = document.getElementById('customInvoiceSearch');
+    const dateStart = document.getElementById('customInvoiceDateStart');
+    const dateEnd = document.getElementById('customInvoiceDateEnd');
+    const tabs = Array.from(document.querySelectorAll('[data-state-filter]'));
+    const noResult = document.getElementById('customInvoicesNoResult');
+    let state = '';
+    const filterInvoices = function () {
+        const term = search.value.trim().toLowerCase();
+        let visible = 0;
+        rows.forEach(function (row) {
             const rowDate = row.dataset.date || '';
-            const matchesSearch = !search || row.textContent.toLowerCase().includes(search);
-            const matchesStatus = !status || row.dataset.status === status;
-            const matchesDateStart = !dateStart || !rowDate || rowDate >= dateStart;
-            const matchesDateEnd = !dateEnd || !rowDate || rowDate <= dateEnd;
-
-            row.style.display = matchesSearch && matchesStatus && matchesDateStart && matchesDateEnd ? '' : 'none';
+            const show = (!term || row.textContent.toLowerCase().includes(term))
+                && (!state || row.dataset.state === state)
+                && (!dateStart.value || !rowDate || rowDate >= dateStart.value)
+                && (!dateEnd.value || !rowDate || rowDate <= dateEnd.value);
+            row.style.display = show ? '' : 'none';
+            visible += show ? 1 : 0;
         });
-    }
-
-    if (searchInput) {
-        searchInput.addEventListener('input', filterCustomInvoices);
-    }
-
-    if (statusFilter) {
-        statusFilter.addEventListener('change', filterCustomInvoices);
-    }
-
-    if (dateStartInput) {
-        dateStartInput.addEventListener('change', filterCustomInvoices);
-    }
-
-    if (dateEndInput) {
-        dateEndInput.addEventListener('change', filterCustomInvoices);
-    }
-
-    const resetCustomInvoiceFiltersButton = document.getElementById('resetCustomInvoiceFilters');
-    if (resetCustomInvoiceFiltersButton) {
-        resetCustomInvoiceFiltersButton.addEventListener('click', function () {
-            if (searchInput) searchInput.value = '';
-            if (statusFilter) statusFilter.value = '';
-            if (dateStartInput) dateStartInput.value = '';
-            if (dateEndInput) dateEndInput.value = '';
-            filterCustomInvoices();
-        });
-    }
-
-    if (window.jQuery && $.fn.DataTable) {
-        const customInvoiceTable = $('#customInvoiceTable').DataTable({
-            paging: true,
-            ordering: true,
-            searching: false,
-            pageLength: 10,
-            lengthMenu: [5, 10, 25, 50],
-            language: {
-                url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/fr-FR.json'
-            },
-            dom: "<'row'<'col-sm-12 col-md-6 d-flex align-items-center justify-content-start'l><'col-sm-12 col-md-6 d-flex justify-content-end'>>" +
-                "<'table-responsive'tr>" +
-                "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
-            columnDefs: [
-                { targets: 8, orderable: false, searchable: false }
-            ]
-        });
-
-        customInvoiceTable.on('draw', function() {
-            filterCustomInvoices();
-        });
-    }
-
-    document.querySelectorAll('.payment-method').forEach((select) => {
-        select.addEventListener('change', () => {
-            const target = document.getElementById(select.dataset.target);
-            if (!target) return;
-            const cashField = target.querySelector('.cash-account-field');
-            const cashSelect = target.querySelector('.cash-account-select');
-            const isCash = select.value === 'cash';
-
-            cashField.classList.toggle('d-none', !isCash);
-            cashSelect.disabled = !isCash;
-            cashSelect.required = isCash;
+        noResult.classList.toggle('d-none', !rows.length || visible > 0);
+    };
+    tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+            state = tab.dataset.stateFilter;
+            tabs.forEach(function (item) {
+                item.classList.toggle('is-active', item === tab);
+                item.setAttribute('aria-pressed', item === tab ? 'true' : 'false');
+            });
+            filterInvoices();
         });
     });
+    search.addEventListener('input', filterInvoices);
+    dateStart.addEventListener('change', filterInvoices);
+    dateEnd.addEventListener('change', filterInvoices);
+});
 </script>
-@endpush
 @endsection

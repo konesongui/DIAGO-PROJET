@@ -194,6 +194,7 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::delete('/commercial/devis/{quote}', [CommercialController::class, 'destroyQuote'])->name('admin.commercial.quotes.destroy');
         Route::post('/commercial/devis/{quote}/duplicate', [CommercialController::class, 'duplicateQuote'])->name('admin.commercial.quotes.duplicate');
         Route::get('/commercial/devis/{quote}/print', [CommercialController::class, 'printQuote'])->name('admin.commercial.quotes.print');
+        Route::get('/commercial/commandes/{order}/print', [CommercialController::class, 'printOrder'])->name('admin.commercial.orders.print');
         Route::post('/commercial/devis/{quote}/email', [CommercialController::class, 'emailQuote'])->name('admin.commercial.quotes.email');
         Route::post('/commercial/devis/{quote}/validate', [CommercialController::class, 'validateQuote'])->name('admin.commercial.quotes.validate');
         Route::post('/commercial/livraisons/{delivery}/validate', [CommercialController::class, 'validateDelivery'])->name('admin.commercial.deliveries.validate');

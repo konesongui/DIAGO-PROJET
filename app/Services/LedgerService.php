@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\JournalEntry;
+use App\Models\JournalEntryLine;
 use App\Models\LedgerAccount;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -113,7 +114,8 @@ class LedgerService
 
             foreach ($lines as $position => $line) {
                 $entry->lines()->create([
-                    'ledger_account_id' => $this->account($entrepriseId, $line['role'])->id,
+                    // Un compte désigné par son rôle, ou directement par son identifiant.
+                    'ledger_account_id' => $line['account_id'] ?? $this->account($entrepriseId, $line['role'])->id,
                     'label' => $line['label'] ?? null,
                     'debit' => round((float) ($line['debit'] ?? 0), 2),
                     'credit' => round((float) ($line['credit'] ?? 0), 2),
@@ -123,6 +125,24 @@ class LedgerService
 
             return $entry->load('lines.account');
         });
+    }
+
+    /**
+     * Solde net, par compte, de toutes les pièces rattachées à un document :
+     * débits moins crédits.
+     *
+     * @return array<int, float> identifiant du compte => solde
+     */
+    public function netBySource(Model $source): array
+    {
+        return JournalEntryLine::query()
+            ->whereHas('entry', fn ($query) => $query->withoutGlobalScope('entreprise')
+                ->where('sourceable_type', $source::class)->where('sourceable_id', $source->getKey()))
+            ->selectRaw('ledger_account_id, SUM(debit) - SUM(credit) AS net')
+            ->groupBy('ledger_account_id')
+            ->pluck('net', 'ledger_account_id')
+            ->map(fn ($net) => round((float) $net, 2))
+            ->all();
     }
 
     /** Une piece a-t-elle deja ete passee pour ce document ? */

@@ -88,6 +88,51 @@ class AccountingPoster
         });
     }
 
+    /**
+     * Remet le journal en accord avec une vente au comptoir modifiée ou annulée.
+     *
+     * Toutes les pièces d'une vente lui sont rattachées : leur solde net est
+     * comparé à ce que la vente doit peser (encaissement, vente HT, TVA ; rien
+     * si elle est annulée) et seul l'écart est passé. Avant, une modification
+     * ne touchait pas le journal et une annulation n'y contrepassait rien.
+     */
+    public function syncPosSale(PosSale $sale, string $label, ?int $userId = null): ?JournalEntry
+    {
+        try {
+            $role = fn (string $role) => $this->ledger->account($sale->entreprise_id, $role)->id;
+            $target = [];
+            if ($sale->status !== 'cancelled') {
+                $ht = round((float) $sale->total_ht, 2);
+                $tax = round((float) $sale->tax_amount, 2);
+                $target[$role($sale->payment_method === 'cash' ? LedgerAccount::ROLE_CASH : LedgerAccount::ROLE_BANK)] = $ht + $tax;
+                $target[$role(LedgerAccount::ROLE_SALES)] = -$ht;
+                $target[$role(LedgerAccount::ROLE_VAT_COLLECTED)] = -$tax;
+            }
+            $net = $this->ledger->netBySource($sale);
+
+            $lines = [];
+            foreach (array_unique(array_merge(array_keys($target), array_keys($net))) as $accountId) {
+                $delta = round(($target[$accountId] ?? 0) - ($net[$accountId] ?? 0), 2);
+                if (abs($delta) >= 0.01) {
+                    $lines[] = ['account_id' => $accountId, 'debit' => max(0, $delta), 'credit' => max(0, -$delta), 'label' => $label];
+                }
+            }
+            if (! $lines) {
+                return null;
+            }
+
+            return $this->ledger->post(
+                $sale->entreprise_id, $sale->payment_method === 'cash' ? 'CA' : 'BQ', now(), $label,
+                $lines, $sale, $sale->currency ?: 'XOF', $userId
+            );
+        } catch (\Throwable $e) {
+            // Comme pour les autres pièces : une comptabilité en retard se rattrape, une vente perdue non.
+            report($e);
+
+            return null;
+        }
+    }
+
     /** Facture fournisseur : charge, TVA deductible et dette fournisseur. */
     public function postSupplierInvoice(SupplierInvoice $invoice, ?int $userId = null): ?JournalEntry
     {
@@ -150,7 +195,7 @@ class AccountingPoster
                 ['role' => $target, 'debit' => $amount, 'label' => 'Encaissement'],
                 ['role' => LedgerAccount::ROLE_CUSTOMERS, 'credit' => $amount, 'label' => 'Solde créance'],
             ],
-            null, $invoice->currency ?: 'XOF', $userId
+            null, $invoice->currency ?: app(TaxService::class)->currencyFor($invoice->entreprise), $userId
         );
     }
 

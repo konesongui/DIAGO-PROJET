@@ -9,7 +9,7 @@ class InventoryAudit extends Model
 {
     use BelongsToEntreprise;
     protected $fillable = [
-        'entreprise_id', 'designation', 'article', 'unit',
+        'entreprise_id', 'stock_inventory_id', 'designation', 'article', 'unit',
         'theoretical_quantity', 'actual_quantity', 'variance',
         'audited_at', 'audited_by_user_id',
     ];

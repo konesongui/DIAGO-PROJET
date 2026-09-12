@@ -1,95 +1,270 @@
 @extends('admin.layout')
 
 @section('content')
-<div class="d-flex justify-content-between align-items-center mb-6">
-    <div>
-        <div class="text-uppercase text-muted fs-8 fw-bold ls-1">Commercial / Proforma</div>
-        <h2 class="fs-2 fw-bold text-dark mb-1">{{ isset($proforma) ? 'Modifier le proforma' : 'Créer un proforma' }}</h2>
-        <p class="text-muted mb-0">Saisissez les informations de la proforma et ajoutez ses produits ou services.</p>
-    </div>
-    <a href="{{ route('admin.commercial.module', 'proforma') }}" class="btn btn-light"><i class="ki-duotone ki-left fs-2 me-2"></i>Retour aux proformas</a>
-</div>
-@if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
+@php
+    $isEdit = isset($proforma);
+    $value = fn (string $field, $default = null) => old($field, $isEdit ? $proforma->{$field} : $default);
+    $dateValue = fn (string $field, ?string $default) => old($field, $isEdit && $proforma->{$field} ? $proforma->{$field}->format('Y-m-d') : $default);
+    // Après une erreur, les lignes saisies sont reprises telles quelles.
+    $lines = old('lines', $isEdit ? $proforma->lines->map->only(['type', 'category', 'item_name', 'unit', 'quantity', 'unit_price', 'discount', 'discount_type'])->all() : []);
+    $clientChoice = (string) old('client_id', $isEdit ? $proforma->client_id : '');
+    $selectedRate = old('tax_rate_id', $isEdit ? $proforma->tax_rate_id : null);
+    $pageTitle = $isEdit ? 'Modifier la proforma ' . $proforma->reference : 'Nouvelle proforma';
+@endphp
 
-<form method="POST" action="{{ isset($proforma) ? route('admin.commercial.proforma.update', $proforma) : route('admin.commercial.proforma.store') }}" id="proformaForm">
-@csrf
-@if(isset($proforma)) @method('PUT') @endif
-<div class="card border-0 mb-5">
-    <div class="card-header border-0"><h3 class="card-title fs-4 fw-bold">Informations générales</h3></div>
-    <div class="card-body">
-        <div class="row g-4">
-            <div class="col-md-6"><label class="form-label required">Client</label><select class="form-select" name="client_id" id="clientSelect"><option value="">Sélectionner</option>@foreach($clients as $client)<option value="{{ $client->id }}" @selected(isset($proforma) && $proforma->client_id === $client->id)>{{ $client->name }} ({{ $client->phone ?: '000' }})</option>@endforeach</select><div class="form-text">Sélectionnez un client existant ou utilisez les champs de création.</div></div>
-            <div class="col-md-3"><label class="form-label required">Date de création</label><input type="date" class="form-control" name="creation_date" value="{{ isset($proforma) ? $proforma->creation_date->format('Y-m-d') : now()->format('Y-m-d') }}" required></div>
-            <div class="col-md-3"><label class="form-label">Date limite</label><input type="date" class="form-control" name="due_date" value="{{ isset($proforma->due_date) && $proforma->due_date ? $proforma->due_date->format('Y-m-d') : '' }}"></div>
-            <div class="col-md-6"><label class="form-label">Nouveau client</label><input class="form-control" name="new_client_name" placeholder="Nom du client"></div>
-            <div class="col-md-3"><label class="form-label">Téléphone</label><input class="form-control" name="new_client_phone"></div>
-            <div class="col-md-3"><label class="form-label">Email</label><input type="email" class="form-control" name="new_client_email"></div>
-            <div class="col-md-3"><label class="form-label">Mode de paiement</label><select class="form-select" name="payment_method"><option value="">Sélectionner...</option>@foreach(['Espèces','Chèque','Virement','Carte bancaire'] as $method)<option @selected(isset($proforma) && $proforma->payment_method === $method)>{{ $method }}</option>@endforeach</select></div>
-            <div class="col-md-4"><label class="form-label">Termes de paiements</label><input class="form-control" name="payment_terms" value="{{ $proforma->payment_terms ?? '' }}"></div>
-            <div class="col-md-4"><label class="form-label">Termes de livraison</label><input class="form-control" name="delivery_terms" value="{{ $proforma->delivery_terms ?? '' }}"></div>
-            <div class="col-md-4"><label class="form-label">Lieu de livraison</label><input class="form-control" name="delivery_location" value="{{ $proforma->delivery_location ?? '' }}"></div>
-            <div class="col-12"><label class="form-label">Objet</label><textarea class="form-control" name="subject" rows="2">{{ $proforma->subject ?? '' }}</textarea></div>
+<div class="dg-font dg-scope">
+    <x-dg.page-header :title="$pageTitle" subtitle="Offre chiffrée à remettre au client : produits, services, remises par ligne et TVA." :back="route('admin.commercial.module', 'proforma')" back-label="Proformas">
+        <x-slot:actions>
+            <a href="{{ route('admin.commercial.module', 'proforma') }}" class="dg-btn dg-btn--outline">Annuler</a>
+            <button type="submit" form="proformaForm" class="dg-btn dg-btn--primary"><i class="bi bi-check-lg"></i>Enregistrer la proforma</button>
+        </x-slot:actions>
+    </x-dg.page-header>
+
+    @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
+
+    <form method="POST" action="{{ $isEdit ? route('admin.commercial.proforma.update', $proforma) : route('admin.commercial.proforma.store') }}" id="proformaForm"
+        data-currency="{{ currency_symbol() }}" data-decimals="{{ app(\App\Services\TaxService::class)->decimalsFor(company_currency()['code']) }}">
+        @csrf
+        @if($isEdit) @method('PUT') @endif
+
+        <x-dg.card title="Informations de la proforma" icon="bi-file-earmark-richtext" color="blue" class="mb-6">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label" for="proformaClient">Client <span class="text-danger">*</span></label>
+                    <select id="proformaClient" name="client_id" class="form-select">
+                        <option value="">Sélectionner un client…</option>
+                        @foreach($clients as $client)
+                            <option value="{{ $client->id }}" @selected($clientChoice === (string) $client->id)>{{ $client->name }}{{ $client->phone ? ' · ' . $client->phone : '' }}</option>
+                        @endforeach
+                        <option value="new" @selected($clientChoice === 'new')>Nouveau client…</option>
+                    </select>
+                </div>
+                <div class="col-md-3"><label class="form-label" for="proformaDate">Date <span class="text-danger">*</span></label><input id="proformaDate" type="date" name="creation_date" class="form-control" required value="{{ $dateValue('creation_date', now()->format('Y-m-d')) }}"></div>
+                <div class="col-md-3"><label class="form-label" for="proformaDueDate">Valable jusqu’au</label><input id="proformaDueDate" type="date" name="due_date" class="form-control" value="{{ $dateValue('due_date', now()->addMonth()->format('Y-m-d')) }}"></div>
+                <div class="col-12 new-client-fields">
+                    <div class="proforma-new-client">
+                        <div class="row g-3">
+                            <div class="col-md-5"><label class="form-label" for="newClientName">Nom du nouveau client <span class="text-danger">*</span></label><input id="newClientName" name="new_client_name" class="form-control" maxlength="190" value="{{ old('new_client_name') }}"></div>
+                            <div class="col-md-3"><label class="form-label" for="newClientPhone">Téléphone</label><input id="newClientPhone" name="new_client_phone" class="form-control" maxlength="60" value="{{ old('new_client_phone') }}"></div>
+                            <div class="col-md-4"><label class="form-label" for="newClientEmail">E-mail</label><input id="newClientEmail" type="email" name="new_client_email" class="form-control" maxlength="190" value="{{ old('new_client_email') }}"></div>
+                        </div>
+                        <p class="dg-muted mb-0 mt-2" style="font-size:13px"><i class="bi bi-info-circle me-1"></i>Le client est ajouté au carnet à l’enregistrement.</p>
+                    </div>
+                </div>
+                <div class="col-md-4"><label class="form-label" for="proformaPaymentTerms">Conditions de règlement</label><input id="proformaPaymentTerms" name="payment_terms" class="form-control" maxlength="190" value="{{ $value('payment_terms') }}" placeholder="Ex : 50 % à la commande, solde à la livraison"></div>
+                <div class="col-md-4">
+                    <label class="form-label" for="proformaPaymentMethod">Mode de paiement</label>
+                    <select id="proformaPaymentMethod" name="payment_method" class="form-select">
+                        <option value="">Sélectionner…</option>
+                        @foreach(['Espèces', 'Chèque', 'Virement', 'Carte bancaire'] as $method)
+                            <option value="{{ $method }}" @selected($value('payment_method') === $method)>{{ $method }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-md-4"><label class="form-label" for="proformaDeliveryLocation">Lieu de livraison</label><input id="proformaDeliveryLocation" name="delivery_location" class="form-control" maxlength="190" value="{{ $value('delivery_location') }}"></div>
+                <div class="col-md-6"><label class="form-label" for="proformaDeliveryTerms">Conditions de livraison</label><input id="proformaDeliveryTerms" name="delivery_terms" class="form-control" maxlength="190" value="{{ $value('delivery_terms') }}"></div>
+                <div class="col-md-6"><label class="form-label" for="proformaSubject">Objet</label><input id="proformaSubject" name="subject" class="form-control" maxlength="2000" value="{{ $value('subject') }}" placeholder="Ex : Audit des systèmes d’information"></div>
+            </div>
+        </x-dg.card>
+
+        <x-dg.card title="Lignes de la proforma" icon="bi-list-ul" color="purple" class="mb-6">
+            <x-slot:actions>
+                <button type="button" class="dg-btn dg-btn--outline dg-btn--sm" id="addProformaLine"><i class="bi bi-plus-lg"></i>Ajouter une ligne</button>
+            </x-slot:actions>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0 no-export no-column-sort proforma-lines" id="proformaLines">
+                    <thead>
+                        <tr>
+                            <th>Désignation</th>
+                            <th style="width:94px">Unité</th>
+                            <th style="width:80px">Qté</th>
+                            <th style="width:124px">Prix unitaire HT</th>
+                            <th style="width:190px">Remise</th>
+                            <th class="text-end" style="width:130px">Total HT</th>
+                            <th style="width:44px"><span class="visually-hidden">Retirer</span></th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <p class="dg-muted mt-3 mb-0" style="font-size:13px"><i class="bi bi-info-circle me-1"></i>La désignation reste libre : le stock et le catalogue des services ne sont que des suggestions. Un service du catalogue reprend son prix HT.</p>
+        </x-dg.card>
+
+        <div class="proforma-summary">
+            <div class="dg-callout dg-tone-blue">
+                <span class="dg-tile"><i class="bi bi-info-lg"></i></span>
+                <div style="font-size:14px; flex:1 1 0; min-width:220px">
+                    <strong class="d-block mb-1">Une offre, pas une vente</strong>
+                    La proforma n’entre ni au journal ni dans le chiffre d’affaires. Son numéro est attribué à l’enregistrement ; envoyez-la ensuite au client depuis la liste.
+                </div>
+            </div>
+            <div class="dg-card proforma-totals">
+                <div class="proforma-totals__row"><span>Total HT brut</span><strong id="totalHt">0</strong></div>
+                <div class="proforma-totals__row"><span>Remises sur les lignes</span><strong id="totalDiscount">0</strong></div>
+                <div class="proforma-totals__row proforma-totals__row--sep"><span>Montant net HT</span><strong id="netHt">0</strong></div>
+                <div class="proforma-totals__row">
+                    <label for="taxRate" class="mb-0">TVA</label>
+                    <select name="tax_rate_id" id="taxRate" class="form-select form-select-sm" style="width:190px">
+                        @foreach($taxRates ?? [] as $rate)
+                            <option value="{{ $rate->id }}" data-rate="{{ $rate->isZeroRated() ? 0 : (float) $rate->rate }}" @selected($selectedRate ? (string) $selectedRate === (string) $rate->id : $rate->is_default)>{{ $rate->name }}@if(!$rate->isZeroRated()) ({{ rtrim(rtrim(number_format((float) $rate->rate, 3, ',', ' '), '0'), ',') }} %)@endif</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="proforma-totals__row"><span>Montant de TVA</span><strong id="taxAmount">0</strong></div>
+                <div class="proforma-totals__grand"><span>Total TTC</span><strong id="totalTtc">0</strong></div>
+                <button type="submit" class="dg-btn dg-btn--primary dg-btn--block mt-4"><i class="bi bi-check-lg"></i>Enregistrer la proforma</button>
+            </div>
         </div>
-    </div>
+    </form>
 </div>
 
-<div class="card border-0 mb-5">
-    <div class="card-header border-0 d-flex justify-content-between align-items-center"><h3 class="card-title fs-4 fw-bold">Articles / services</h3><button type="button" class="btn btn-sm btn-light-primary" id="addProformaLine"><i class="ki-duotone ki-plus fs-2 me-1"></i>Ajouter une ligne</button></div>
-    <div class="card-body">
-        <div class="table-responsive"><table class="table table-bordered align-middle" id="proformaLines"><thead><tr><th>Type</th><th>Catégorie</th><th>Article / Service</th><th>Unité / Durée</th><th>Qté</th><th>Prix unitaire</th><th>Remise</th><th></th></tr></thead><tbody></tbody></table></div>
-        <div class="row justify-content-end mt-5"><div class="col-md-5 col-lg-4"><div class="d-flex justify-content-between mb-2"><span>Total HT</span><strong id="totalHt">0,00</strong></div><div class="d-flex justify-content-between mb-2"><span>Total remise</span><strong id="totalDiscount">0,00</strong></div><div class="d-flex justify-content-between mb-2"><span>Montant net HT</span><strong id="netHt">0,00</strong></div><div class="d-flex justify-content-between align-items-center mb-2"><label for="taxRate">TVA (%)</label><select class="form-select form-select-sm w-50" name="tax_rate" id="taxRate"><option value="0" @selected(isset($proforma) && (float) $proforma->tax_rate == 0)>Aucune taxe (0 %)</option>@foreach($taxRates ?? [] as $rate)<option value="{{ (float) $rate->rate }}" @selected(isset($proforma) ? (float) $proforma->tax_rate === (float) $rate->rate : $rate->is_default)>{{ $rate->name }}@if(!$rate->isZeroRated()) ({{ rtrim(rtrim(number_format((float) $rate->rate, 3, ',', ' '), '0'), ',') }} %)@endif</option>@endforeach</select></div><div class="separator my-3"></div><div class="d-flex justify-content-between fs-3"><strong>Total TTC</strong><strong id="totalTtc">0,00</strong></div></div></div>
-    </div>
-</div>
-<div class="d-flex justify-content-end gap-3"><a href="{{ route('admin.commercial.module', 'proforma') }}" class="btn btn-light">Annuler</a><button class="btn btn-primary" type="submit">{{ isset($proforma) ? 'Enregistrer les modifications' : 'Enregistrer le proforma' }}</button></div>
-</form>
+<datalist id="proformaArticlesList">@foreach($catalogArticles as $article)<option value="{{ $article['name'] }}" data-unit="{{ $article['unit'] }}" label="{{ trim(($article['article'] ?: '') . (($article['unit'] ?? '') ? ' - ' . $article['unit'] : '')) }}"></option>@endforeach</datalist>
+<datalist id="proformaServicesList">@foreach($catalogServices as $service)<option value="{{ $service->name }}" data-price="{{ $service->price }}" data-unit="{{ $service->unit }}" label="{{ $service->unit ?: 'Service' }}"></option>@endforeach</datalist>
+<template id="proformaLineTemplate">
+    <tr>
+        <td>
+            <input class="form-control line-name" name="lines[__INDEX__][item_name]" list="proformaArticlesList" placeholder="Choisir ou saisir une désignation" maxlength="190" required aria-label="Désignation">
+            <div class="proforma-line-meta">
+                <select class="form-select form-select-sm line-type" name="lines[__INDEX__][type]" aria-label="Type"><option value="product">Produit</option><option value="service">Service</option></select>
+                <input class="form-control form-control-sm line-category" name="lines[__INDEX__][category]" maxlength="190" placeholder="Catégorie (facultatif)" aria-label="Catégorie">
+            </div>
+        </td>
+        <td><input class="form-control line-unit" name="lines[__INDEX__][unit]" maxlength="50" aria-label="Unité"></td>
+        <td><input class="form-control line-quantity" name="lines[__INDEX__][quantity]" type="number" min="0.001" step="0.001" value="1" required aria-label="Quantité"></td>
+        <td><input class="form-control line-price" name="lines[__INDEX__][unit_price]" type="number" min="0" step="0.01" value="0" required aria-label="Prix unitaire HT"></td>
+        <td>
+            <div class="input-group">
+                <input class="form-control line-discount" name="lines[__INDEX__][discount]" type="number" min="0" step="0.01" value="0" aria-label="Remise">
+                <select class="form-select line-discount-type" name="lines[__INDEX__][discount_type]" aria-label="Type de remise"><option value="percent">%</option><option value="amount">{{ currency_symbol() }}</option></select>
+            </div>
+        </td>
+        <td class="text-end dg-cell-num line-total">0</td>
+        <td class="text-end"><button type="button" class="dg-icon-btn dg-icon-btn--sm dg-icon-btn--danger remove-proforma-line" title="Retirer la ligne" aria-label="Retirer la ligne"><i class="bi bi-x-lg"></i></button></td>
+    </tr>
+</template>
 
-<template id="proformaLineTemplate"><tr><td><select class="form-select form-select-sm" name="lines[__INDEX__][type]"><option value="product">Produit</option><option value="service">Service</option></select></td><td><input class="form-control form-control-sm" name="lines[__INDEX__][category]"></td><td><input class="form-control form-control-sm" name="lines[__INDEX__][item_name]" required></td><td><input class="form-control form-control-sm" name="lines[__INDEX__][unit]"></td><td><input class="form-control form-control-sm line-quantity" type="number" name="lines[__INDEX__][quantity]" value="1" min="0.001" step="0.001" required></td><td><input class="form-control form-control-sm line-price" type="number" name="lines[__INDEX__][unit_price]" value="0" min="0" step="0.01" required></td><td><div class="input-group input-group-sm"><input class="form-control line-discount" type="number" name="lines[__INDEX__][discount]" value="0" min="0" step="0.01"><select class="form-select line-discount-type" name="lines[__INDEX__][discount_type]"><option value="percent">%</option><option value="amount">{{ currency_symbol() }}</option></select></div></td><td><button type="button" class="btn btn-sm btn-light-danger remove-line">&times;</button></td></tr></template>
+<style>
+    .proforma-new-client { padding: 16px; border: 1px dashed rgba(37, 99, 235, .45); border-radius: var(--dg-radius); background: rgba(37, 99, 235, .04); }
+    .proforma-lines { min-width: 880px; }
+    .proforma-line-meta { display: flex; gap: 8px; margin-top: 8px; }
+    .proforma-line-meta .line-type { flex: 0 0 116px; }
+    .proforma-lines .line-discount-type { flex: 0 0 76px; padding-left: 10px; padding-right: 24px; background-position: right 8px center; }
+    .proforma-lines td { vertical-align: top; }
+    .proforma-lines td.line-total { padding-top: 18px !important; }
+    .dg-scope .proforma-lines > thead > tr > th,
+    .dg-scope .proforma-lines > tbody > tr > td { padding-left: 6px !important; padding-right: 6px !important; }
+    .proforma-summary { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 24px; align-items: start; }
+    .proforma-totals__row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 0; font-size: 14px; }
+    .proforma-totals__row strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .proforma-totals__row--sep { margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--dg-border); }
+    .proforma-totals__grand { display: flex; justify-content: space-between; align-items: baseline; margin-top: 8px; padding-top: 12px; border-top: 2px solid var(--dg-navy); color: var(--dg-navy); }
+    .proforma-totals__grand span { font-weight: 600; font-size: 15px; }
+    .proforma-totals__grand strong { font-size: 22px; white-space: nowrap; }
+    @media (max-width: 991px) { .proforma-summary { grid-template-columns: 1fr; } }
+</style>
 <script>
 (() => {
-    const tbody = document.querySelector('#proformaLines tbody');
+    const form = document.getElementById('proformaForm');
+    const body = document.querySelector('#proformaLines tbody');
     const template = document.getElementById('proformaLineTemplate');
-    const money = (value) => Number(value || 0).toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    const addLine = () => { const index = tbody.children.length; tbody.insertAdjacentHTML('beforeend', template.innerHTML.replaceAll('__INDEX__', index)); };
-    const totals = () => {
-        let ht = 0, discount = 0;
-        tbody.querySelectorAll('tr').forEach((row) => {
-            const quantity = Number(row.querySelector('.line-quantity').value) || 0;
-            const price = Number(row.querySelector('.line-price').value) || 0;
-            const value = Number(row.querySelector('.line-discount').value) || 0;
-            const gross = quantity * price;
-            const reduction = row.querySelector('.line-discount-type').value === 'amount' ? value : gross * value / 100;
-            ht += gross;
-            discount += Math.min(gross, reduction);
+    const decimals = Number(form.dataset.decimals) || 0;
+    const round = value => Math.round(value * 10 ** decimals) / 10 ** decimals;
+    const money = value => Number(value || 0).toLocaleString('fr-FR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + ' ' + form.dataset.currency;
+
+    // Client : les champs du nouveau client n'apparaissent que pour « Nouveau client ».
+    const client = document.getElementById('proformaClient');
+    const syncClient = () => {
+        const isNew = client.value === 'new';
+        document.querySelector('.new-client-fields').classList.toggle('d-none', !isNew);
+        document.getElementById('newClientName').required = isNew;
+    };
+    client.addEventListener('change', syncClient);
+
+    // Le type choisit la liste de suggestions ; un service du catalogue complète l'unité et le prix HT.
+    const applyCatalog = row => {
+        const type = row.querySelector('.line-type').value;
+        const list = document.getElementById(type === 'service' ? 'proformaServicesList' : 'proformaArticlesList');
+        row.querySelector('.line-name').setAttribute('list', list.id);
+        const name = row.querySelector('.line-name').value.trim().toLowerCase();
+        const option = [...list.options].find(item => item.value.toLowerCase() === name);
+        if (!option) return;
+        const unit = row.querySelector('.line-unit');
+        if (!unit.value && option.dataset.unit) unit.value = option.dataset.unit;
+        const price = row.querySelector('.line-price');
+        if (type === 'service' && !Number(price.value)) price.value = option.dataset.price || 0;
+    };
+
+    const reindex = () => {
+        body.querySelectorAll('tr').forEach((row, index) => {
+            row.querySelectorAll('[name^="lines["]').forEach(field => {
+                field.name = field.name.replace(/^lines\[\d+\]/, 'lines[' + index + ']');
+            });
         });
-        const net = ht - discount;
-        const tax = net * (Number(document.getElementById('taxRate').value) || 0) / 100;
-        document.getElementById('totalHt').textContent = money(ht);
-        document.getElementById('totalDiscount').textContent = money(discount);
+    };
+
+    const add = (line = null) => {
+        body.insertAdjacentHTML('beforeend', template.innerHTML.replaceAll('__INDEX__', body.children.length));
+        const row = body.lastElementChild;
+        row.querySelector('.line-type').value = line?.type === 'service' ? 'service' : 'product';
+        if (line) {
+            row.querySelector('.line-name').value = line.item_name || '';
+            row.querySelector('.line-category').value = line.category || '';
+            row.querySelector('.line-unit').value = line.unit || '';
+            row.querySelector('.line-quantity').value = Number(line.quantity) || 1;
+            row.querySelector('.line-price').value = Number(line.unit_price) || 0;
+            row.querySelector('.line-discount').value = Number(line.discount) || 0;
+            row.querySelector('.line-discount-type').value = line.discount_type === 'amount' ? 'amount' : 'percent';
+        }
+        applyCatalog(row);
+        return row;
+    };
+
+    // Même calcul que le serveur : remise plafonnée au montant de la ligne, TVA sur le net arrondi.
+    const totals = () => {
+        let gross = 0;
+        let discount = 0;
+        body.querySelectorAll('tr').forEach(row => {
+            const lineGross = (Number(row.querySelector('.line-quantity').value) || 0) * (Number(row.querySelector('.line-price').value) || 0);
+            const value = Number(row.querySelector('.line-discount').value) || 0;
+            const lineDiscount = Math.min(lineGross, row.querySelector('.line-discount-type').value === 'amount' ? value : lineGross * Math.min(value, 100) / 100);
+            row.querySelector('.line-total').textContent = money(lineGross - lineDiscount);
+            gross += lineGross;
+            discount += lineDiscount;
+        });
+        const net = round(gross - discount);
+        const rate = Number(document.getElementById('taxRate').selectedOptions[0]?.dataset.rate) || 0;
+        const tax = round(net * rate / 100);
+        document.getElementById('totalHt').textContent = money(gross);
+        document.getElementById('totalDiscount').textContent = discount > 0 ? '− ' + money(discount) : money(0);
         document.getElementById('netHt').textContent = money(net);
+        document.getElementById('taxAmount').textContent = money(tax);
         document.getElementById('totalTtc').textContent = money(net + tax);
     };
-    document.getElementById('addProformaLine').addEventListener('click', addLine);
+
+    document.getElementById('addProformaLine').addEventListener('click', () => { add().querySelector('.line-name').focus(); totals(); });
+    body.addEventListener('change', event => {
+        if (event.target.matches('.line-type, .line-name')) applyCatalog(event.target.closest('tr'));
+        totals();
+    });
+    body.addEventListener('click', event => {
+        if (!event.target.closest('.remove-proforma-line')) return;
+        // Une proforma garde toujours au moins une ligne.
+        if (body.children.length > 1) {
+            event.target.closest('tr').remove();
+            reindex();
+        } else {
+            body.firstElementChild.querySelectorAll('input').forEach(input => {
+                input.value = input.classList.contains('line-quantity') ? 1 : (input.classList.contains('line-price') || input.classList.contains('line-discount') ? 0 : '');
+            });
+        }
+        totals();
+    });
+    form.addEventListener('input', totals);
     document.getElementById('taxRate').addEventListener('change', totals);
-    tbody.addEventListener('input', totals);
-    tbody.addEventListener('change', totals);
-    tbody.addEventListener('click', (event) => { if (event.target.closest('.remove-line')) { event.target.closest('tr').remove(); totals(); } });
-    const existingLines = @json(isset($proforma) ? $proforma->lines : []);
-    if (existingLines.length) {
-        existingLines.forEach((line) => {
-            addLine();
-            const row = tbody.lastElementChild;
-            row.querySelector('[name$="[type]"]').value = line.type || 'product';
-            row.querySelector('[name$="[category]"]').value = line.category || '';
-            row.querySelector('[name$="[item_name]"]').value = line.item_name || '';
-            row.querySelector('[name$="[unit]"]').value = line.unit || '';
-            row.querySelector('.line-quantity').value = line.quantity || 1;
-            row.querySelector('.line-price').value = line.unit_price || 0;
-            row.querySelector('.line-discount').value = line.discount || 0;
-            row.querySelector('.line-discount-type').value = line.discount_type || 'percent';
-        });
-    } else {
-        addLine();
-    }
+
+    const lines = @json(array_values($lines));
+    (lines.length ? lines : [null]).forEach(add);
+    syncClient();
     totals();
 })();
 </script>

@@ -40,7 +40,10 @@ class AnnualReportController extends AdminController
         $pdf = Pdf::loadView('admin.annual-report-pdf', [
             'report' => $report,
             'data' => $report->data,
-        ])->setPaper('a4');
+            'company' => auth()->user()->entreprise,
+        ])->setPaper('a4')
+            // Sans sous-ensemble, la police entière est embarquée (plus d'un mégaoctet).
+            ->setOption('isFontSubsettingEnabled', true);
 
         return $pdf->download('bilan-financier-' . $report->fiscal_year . '.pdf');
     }

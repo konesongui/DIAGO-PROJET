@@ -1,16 +1,56 @@
-<!doctype html>
-<html lang="fr">
-<head>
-<meta charset="utf-8"><title>Facture {{ $invoice->id }}</title>
-<style>
-@page{margin:18mm 16mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#555;font-size:12px;margin:0}.clearfix:after{content:"";display:table;clear:both}.header{border-bottom:1px solid #aaa;padding:8px 0 14px;margin-bottom:22px}.company{float:left;width:55%}.company h2{margin:0 0 8px;color:#17233d;font-size:20px}.company p{line-height:1.55;margin:0}.document{float:right;width:42%;text-align:right}.document h1{color:#0087c3;font-size:27px;font-weight:400;margin:0 0 10px}.document p{line-height:1.6;margin:0}.client{border-left:6px solid #0087c3;padding:7px 0 7px 12px;line-height:1.55;margin-bottom:18px}.client strong{font-size:15px;color:#222}.items{width:100%;border-collapse:collapse;margin-top:18px}.items th{background:#eee;padding:11px 8px;text-align:center;font-weight:400;border-bottom:1px solid white}.items td{background:#f7f7f7;padding:10px 8px;border-bottom:1px solid white}.desc{text-align:left}.center{text-align:center}.right{text-align:right;white-space:nowrap}.totals{width:40%;margin:18px 0 0 auto;border-collapse:collapse}.totals td{padding:8px 10px;text-align:right;border-top:1px solid #ddd}.totals tr:last-child td{color:#168b47;font-size:16px;border-top:1px solid #168b47}.footer{border-top:1px solid #aaa;color:#777;text-align:center;margin-top:38px;padding-top:10px;font-size:10px}@media print{.no-print{display:none}}
-</style>
-</head>
-<body>
-<header class="header clearfix"><div class="company"><h2>{{ $company?->name ?: 'Diagoma ERP' }}</h2><p>{{ data_get($company?->settings, 'address') ?: 'Adresse de l’entreprise' }}<br>Tél : {{ data_get($company?->settings, 'phone') ?: '-' }}<br>Email : {{ data_get($company?->settings, 'email') ?: '-' }}<br>NIF : {{ data_get($company?->settings, 'nif') ?: '-' }}</p></div><div class="document"><h1>FACTURE N° {{ $invoice->id }}</h1><p>Date : {{ optional($invoice->created_at)->format('d/m/Y') }}<br>Statut : {{ ucfirst($invoice->status) }}</p></div></header>
-<div class="client"><strong>Client</strong><br>{{ $client?->name ?: $invoice->client_name }}<br>{{ $client?->address ?: '-' }}<br>Tél : {{ $client?->phone ?: '-' }}<br>Email : {{ $client?->email ?: '-' }}<br>Bon de commande : {{ $invoice->delivery?->order?->customer_order_code ?: '-' }}</div>
-<table class="items"><thead><tr><th>Article</th><th>Catégorie</th><th>Qté</th><th>Unité</th><th>Prix unitaire HT</th><th>Total HT</th></tr></thead><tbody>@foreach(($invoice->delivery?->lines ?? []) as $line)<tr><td class="desc">{{ $line['item_name'] ?? '-' }}</td><td class="desc">{{ $line['category_name'] ?? '-' }}</td><td class="center">{{ $line['quantity'] ?? 0 }}</td><td class="center">{{ $line['unit'] ?? '-' }}</td><td class="right">{{ money($line['unit_price'] ?? 0) }}</td><td class="right">{{ money((float)($line['quantity'] ?? 0)*(float)($line['unit_price'] ?? 0)) }}</td></tr>@endforeach</tbody></table>
-<table class="totals"><tr><td>Total TTC</td><td>{{ money($invoice->amount) }}</td></tr><tr><td>Déjà payé</td><td>{{ money($invoice->paid_amount) }}</td></tr><tr><td><strong>Reste à payer</strong></td><td><strong>{{ money(max(0,(float)$invoice->amount-(float)$invoice->paid_amount)) }}</strong></td></tr></table>
-@if($invoice->fne_status === 'certified')<div style="margin-top:22px;border:1px solid #168b47;padding:12px;line-height:1.7"><strong style="color:#168b47">FACTURE CERTIFIÉE FNE</strong><br>Référence FNE : {{ $invoice->fne_reference ?: '-' }}<br>Date de certification : {{ optional($invoice->fne_certified_at)->format('d/m/Y H:i') ?: '-' }}<br>Sticker / solde FNE : {{ $invoice->fne_balance_sticker ?? '-' }}</div>@endif
-<footer class="footer">{{ $company?->name ?: 'Diagoma ERP' }} – Document généré le {{ now()->format('d/m/Y à H:i') }}</footer><script>window.print()</script>
-</body></html>
+@extends('admin.print.layout')
+
+@php
+    $quote = $invoice->delivery?->order?->quote;
+    $issuedAt = $invoice->issued_at ?? $invoice->created_at;
+    $statuses = [
+        'paid' => ['Payée', 'success'],
+        'partially_paid' => ['Partiellement payée', 'warning'],
+        'unpaid' => ['En attente de paiement', 'danger'],
+        'cancelled' => ['Annulée', 'neutral'],
+    ];
+    [$statusLabel, $statusTone] = $statuses[$invoice->status] ?? [$invoice->status, 'neutral'];
+@endphp
+
+@section('title', 'Facture N° ' . $invoice->id)
+@section('doc-title', 'FACTURE')
+
+@section('doc-meta')
+    <p class="number">N° {{ $invoice->id }}</p>
+    <p>Date d'émission : {{ $issuedAt?->format('d/m/Y') ?: '—' }}</p>
+    <span class="pill pill--{{ $statusTone }}">{{ $statusLabel }}</span>
+@endsection
+
+@section('content')
+    <section class="parties">
+        <div class="box box--accent">
+            <h2>Facturé à</h2>
+            <strong>{{ $client?->name ?: $invoice->client_name }}</strong>
+            @if($client?->address)<p>{{ $client->address }}</p>@endif
+            @if($client?->city)<p>{{ $client->city }}</p>@endif
+            @if($client?->phone || $client?->email)<p>{{ collect([$client?->phone ? 'Tél : ' . $client->phone : null, $client?->email])->filter()->implode(' · ') }}</p>@endif
+            @if($client?->tax_id)<p>Compte contribuable : {{ $client->tax_id }}</p>@endif
+        </div>
+        <div class="box">
+            <h2>Références</h2>
+            <dl>
+                <dt>Bon de commande</dt><dd>{{ $invoice->delivery?->order?->customer_order_code ?: '—' }}</dd>
+                @if($quote?->reference)<dt>Devis</dt><dd>{{ $quote->reference }}</dd>@endif
+                @if($quote?->subject)<dt>Objet</dt><dd>{{ $quote->subject }}</dd>@endif
+                @if($quote?->payment_method)<dt>Mode de paiement</dt><dd>{{ $quote->payment_method }}</dd>@endif
+                @if($quote?->delivery_location)<dt>Lieu de livraison</dt><dd>{{ $quote->delivery_location }}</dd>@endif
+            </dl>
+        </div>
+    </section>
+
+    @include('admin.print.sale-body')
+
+    @if($invoice->fne_status === 'certified')
+        <div class="callout">
+            <strong>FACTURE CERTIFIÉE FNE</strong><br>
+            Référence FNE : {{ $invoice->fne_reference ?: '—' }}
+            · Certifiée le {{ $invoice->fne_certified_at?->format('d/m/Y à H:i') ?: '—' }}
+            @if($invoice->fne_balance_sticker !== null) · Solde du sticker : {{ $invoice->fne_balance_sticker }}@endif
+        </div>
+    @endif
+@endsection

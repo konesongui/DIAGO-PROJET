@@ -93,4 +93,27 @@ class SalesInvoicesPageTest extends TestCase
         $this->assertSame('partially_paid', $invoice->status);
         $this->assertSame(200000.0, (float) $cash->fresh()->balance);
     }
+
+    public function test_l_annulation_exige_un_motif_et_emet_un_avoir(): void
+    {
+        $alpha = $this->makeCompany('alpha');
+        $invoice = $this->makeInvoice($alpha, 590000, 0, 'unpaid');
+        $admin = $this->makeAdmin($alpha);
+
+        $this->actingAs($admin)
+            ->get(route('admin.commercial.module', 'factures'))
+            ->assertSee('name="reason"', false);
+
+        $this->actingAs($admin)
+            ->from(route('admin.commercial.module', 'factures'))
+            ->post(route('admin.commercial.invoices.cancel', $invoice), ['cancel_invoice_id' => $invoice->id])
+            ->assertSessionHasErrors('reason');
+        $this->assertSame('unpaid', $invoice->fresh()->status);
+
+        $this->actingAs($admin)
+            ->post(route('admin.commercial.invoices.cancel', $invoice), ['cancel_invoice_id' => $invoice->id, 'reason' => 'Commande annulée par le client'])
+            ->assertSessionHasNoErrors();
+        $this->assertSame('cancelled', $invoice->fresh()->status);
+        $this->assertTrue(\App\Models\CreditNote::withoutGlobalScope('entreprise')->where('creditable_id', $invoice->id)->exists());
+    }
 }

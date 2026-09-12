@@ -12,6 +12,11 @@ class StockExitLine extends Model
     protected $fillable = ['stock_exit_id', 'stock_entry_line_id', 'designation', 'article', 'unit', 'quantity', 'unit_price', 'total_value'];
     protected $casts = ['quantity' => 'decimal:3', 'unit_price' => 'decimal:2', 'total_value' => 'decimal:2'];
 
+    public function stockExit(): BelongsTo
+    {
+        return $this->belongsTo(StockExit::class);
+    }
+
     public function entryLine(): BelongsTo
     {
         return $this->belongsTo(StockEntryLine::class, 'stock_entry_line_id');

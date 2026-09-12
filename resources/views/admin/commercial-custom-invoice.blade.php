@@ -1,539 +1,321 @@
 @extends('admin.layout')
 
+@section('content')
 @php
-    $isEdit = !empty($invoice);
-    $invoiceItems = $invoice?->items ?? [[
-        'item_name' => 'Impression de livre',
-        'item_category' => 'impression',
-        'unit' => 'Exemplaire',
-        'quantity' => 1,
-        'price' => 0,
-        'book_type' => '',
-        'book_type_other' => '',
-        'paper_type' => 'bouffant_creme',
-        'paper_type_other' => '',
-        'page_count' => 100,
-        'printing_type' => 'noir_blanc',
-        'cover_type' => 'couche_300g',
-        'book_format' => 'poche_11x18',
-        'format_other' => '',
-        'lamination' => 'brillant',
-        'binding_type' => 'dos_carre_colle',
-        'binding_other' => '',
-        'additional_options' => '',
-    ]];
-    $invoiceServices = collect($invoice?->global_services ?? [])->pluck('key')->all();
-    $invoiceDefaultDiscountType = $invoice && (float) ($invoice->total_discount ?? 0) > 0
-        ? ((float) ($invoice->total_ht ?? 0) > 0 && (float) ($invoice->total_discount ?? 0) >= (float) ($invoice->total_ht ?? 0) * 0.5 ? 'percent' : 'amount')
-        : 'none';
+    $isEdit = ! empty($invoice);
+    $value = fn (string $field, $default = null) => old($field, $isEdit ? $invoice->{$field} : $default);
+    $dateValue = fn (string $field, string $default) => old($field, $isEdit && $invoice->{$field} ? $invoice->{$field}->format('Y-m-d') : $default);
+
+    // Toutes les lignes sont reprises (en modification comme après une erreur), pas seulement la première.
+    $defaultItem = ['item_name' => '', 'item_category' => 'impression', 'unit' => 'Exemplaire', 'quantity' => 1, 'price' => 0,
+        'paper_type' => 'bouffant_creme', 'printing_type' => 'noir_blanc', 'cover_type' => 'couche_300g', 'book_format' => 'poche_11x18',
+        'lamination' => 'brillant', 'binding_type' => 'dos_carre_colle', 'page_count' => 100];
+    $items = array_values(old('items', $isEdit && ! empty($invoice->items) ? $invoice->items : [$defaultItem]));
+    $selectedServices = old('global_services', collect($invoice?->global_services ?? [])->pluck('key')->all());
+
+    // Client : celui du carnet dont le nom correspond, sinon la saisie libre.
+    $matchedClient = $isEdit ? $clients->first(fn ($client) => mb_strtolower($client->name) === mb_strtolower((string) $invoice->client_name)) : null;
+    $customer = (string) old('customer', $isEdit ? ($matchedClient?->id ?? 'new') : '');
+
+    // La remise est enregistrée en montant : on la relit comme telle.
+    $discountType = old('discount_type', $isEdit && (float) $invoice->total_discount > 0 ? 'amount' : 'none');
+    $discountValue = old('discount_value', $isEdit ? (float) $invoice->total_discount : 0);
+    $selectedRate = old('tax_rate_id', $isEdit ? $invoice->tax_rate_id : null);
+
+    $options = \App\Models\CustomInvoice::itemOptions();
+    $pageTitle = $isEdit ? 'Modifier la facture ' . $invoice->reference : 'Nouvelle facture personnalisée';
 @endphp
 
-@section('content')
-<style>
-    .custom-invoice-shell { max-width: 1400px; margin: 0 auto; }
-    .custom-invoice-card { background: #fff; border: 1px solid #edf2f7; border-radius: 18px; box-shadow: 0 12px 28px rgba(15,23,42,.04); }
-    .custom-invoice-section { border: 1px dashed #dfe7f3; border-radius: 16px; background: #f9fbff; padding: 18px; }
-    .custom-invoice-item { border: 1px solid #edf2f7; border-radius: 16px; background: #fff; padding: 18px; margin-bottom: 16px; }
-    .field-label { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #64748b; margin-bottom: 8px; }
-    .other-field { display: none; }
-    .service-option { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid #e2e8f0; background: #fff; border-radius: 10px; }
-    .totals-box { background: linear-gradient(135deg, rgba(37,99,235,.07), rgba(14,165,233,.05)); border: 1px solid rgba(37,99,235,.14); border-radius: 16px; padding: 18px; }
-    .summary-total { font-size: 2rem; font-weight: 800; color: #0f172a; }
-</style>
+<div class="dg-font dg-scope">
+    <x-dg.page-header :title="$pageTitle" subtitle="Facture sur mesure : lignes libres, caractéristiques d’impression et forfaits du catalogue." :back="route('admin.commercial.custom-invoice.index')" back-label="Factures personnalisées">
+        <x-slot:actions>
+            <a href="{{ route('admin.commercial.custom-invoice.index') }}" class="dg-btn dg-btn--outline">Annuler</a>
+            <button type="submit" form="customInvoiceForm" class="dg-btn dg-btn--primary"><i class="bi bi-check-lg"></i>Enregistrer la facture</button>
+        </x-slot:actions>
+    </x-dg.page-header>
 
-<div class="custom-invoice-shell">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-5">
-        <div>
-            <div class="text-uppercase text-muted fs-8 fw-bold">Commercial</div>
-            <h2 class="fs-2 fw-bold mb-1">{{ $title ?? 'Facture personnalisée' }}</h2>
-            <p class="text-muted mb-0">{{ $subtitle ?? 'Créer une facture sur mesure sur la base d’une demande de document imprimé.' }}</p>
-        </div>
-        <div class="d-flex gap-2">
-            <a href="{{ route('admin.commercial.custom-invoice.index') }}" class="btn btn-light">Retour</a>
-        </div>
-    </div>
+    @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
 
-    @if(session('success'))
-        <div class="alert alert-success mb-4">{{ session('success') }}</div>
-    @endif
-
-    <form method="POST" action="{{ $isEdit ? route('admin.commercial.custom-invoice.update', $invoice) : route('admin.commercial.custom-invoice.store') }}" class="custom-invoice-card p-4 p-md-5">
+    <form method="POST" action="{{ $isEdit ? route('admin.commercial.custom-invoice.update', $invoice) : route('admin.commercial.custom-invoice.store') }}" id="customInvoiceForm"
+        data-currency="{{ currency_symbol() }}" data-decimals="{{ app(\App\Services\TaxService::class)->decimalsFor(company_currency()['code']) }}">
         @csrf
-        @if($isEdit)
-            @method('PUT')
-        @endif
+        @if($isEdit) @method('PUT') @endif
 
-        <div class="custom-invoice-section mb-4">
-            <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
-                <h3 class="h5 fw-bold text-dark mb-0">Informations du client</h3>
-            </div>
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <label class="field-label">Client</label>
-                    <select name="customer" class="form-select">
-                        <option value="">Sélectionner...</option>
-                        @foreach($clients as $client)
-                            <option value="{{ $client['id'] }}" {{ old('customer', $isEdit ? 'new' : '') == $client['id'] ? 'selected' : '' }}>{{ $client['name'] }} ({{ $client['phone'] }})</option>
+        <div class="custom-grid mb-6">
+            <x-dg.card title="Client et dates" icon="bi-person" color="blue">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label" for="customer">Client</label>
+                        <select id="customer" name="customer" class="form-select">
+                            <option value="">Sélectionner un client…</option>
+                            @foreach($clients as $client)
+                                <option value="{{ $client->id }}" @selected($customer === (string) $client->id)>{{ $client->name }}{{ $client->phone ? ' · ' . $client->phone : '' }}</option>
+                            @endforeach
+                            <option value="new" @selected($customer === 'new')>Autre client (saisie libre)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-12 new-client-field"><label class="form-label" for="newClientName">Nom et prénom</label><input id="newClientName" name="new_client_name" class="form-control" maxlength="255" value="{{ old('new_client_name', $isEdit ? $invoice->client_name : '') }}"></div>
+                    <div class="col-md-6 new-client-field"><label class="form-label" for="newClientPhone">Téléphone / WhatsApp</label><input id="newClientPhone" name="new_client_phone" class="form-control" maxlength="255" value="{{ old('new_client_phone', $isEdit ? $invoice->client_phone : '') }}"></div>
+                    <div class="col-md-6 new-client-field"><label class="form-label" for="newClientEmail">E-mail</label><input id="newClientEmail" type="email" name="new_client_email" class="form-control" maxlength="255" value="{{ old('new_client_email', $isEdit ? $invoice->client_email : '') }}"></div>
+                    <div class="col-md-6"><label class="form-label" for="quoteDate">Date de la facture</label><input id="quoteDate" type="date" name="quote_date" class="form-control" value="{{ $dateValue('quote_date', now()->format('Y-m-d')) }}"></div>
+                    <div class="col-md-6"><label class="form-label" for="validUntil">Date limite</label><input id="validUntil" type="date" name="valid_until" class="form-control" value="{{ $dateValue('valid_until', now()->addDays(30)->format('Y-m-d')) }}"></div>
+                </div>
+            </x-dg.card>
+
+            <x-dg.card title="Conditions" icon="bi-card-checklist" color="teal">
+                <div class="row g-3">
+                    <div class="col-12"><label class="form-label" for="objet">Objet / type de document</label><input id="objet" name="objet" class="form-control" maxlength="255" value="{{ old('objet', $isEdit ? $invoice->subject : '') }}" placeholder="Ex : livre, brochure, catalogue…"></div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="paymentMethod">Mode de règlement prévu</label>
+                        <select id="paymentMethod" name="payment_method" class="form-select">
+                            <option value="">Sélectionner…</option>
+                            @foreach(['Espèces', 'Chèque', 'Virement', 'Carte bancaire'] as $method)
+                                <option value="{{ $method }}" @selected($value('payment_method') === $method)>{{ $method }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-6"><label class="form-label" for="deliveryLocation">Lieu de livraison</label><input id="deliveryLocation" name="delivery_location" class="form-control" maxlength="1000" value="{{ $value('delivery_location') }}"></div>
+                    <div class="col-md-6"><label class="form-label" for="paymentTerms">Conditions de règlement</label><textarea id="paymentTerms" name="payment_terms" class="form-control" rows="2" maxlength="1000" placeholder="Ex : 50 % à la commande, 50 % à la livraison">{{ $value('payment_terms') }}</textarea></div>
+                    <div class="col-md-6"><label class="form-label" for="deliveryTerms">Conditions de livraison</label><textarea id="deliveryTerms" name="delivery_terms" class="form-control" rows="2" maxlength="1000" placeholder="Ex : livraison à domicile, transport inclus">{{ $value('delivery_terms') }}</textarea></div>
+                </div>
+            </x-dg.card>
+        </div>
+
+        <x-dg.card title="Lignes de la facture" icon="bi-list-ul" color="purple" class="mb-6">
+            <x-slot:actions>
+                <button type="button" class="dg-btn dg-btn--outline dg-btn--sm" id="addItemBtn"><i class="bi bi-plus-lg"></i>Ajouter une ligne</button>
+            </x-slot:actions>
+            <div id="itemsContainer" class="d-flex flex-column gap-3"></div>
+        </x-dg.card>
+
+        <x-dg.card title="Forfaits du catalogue" icon="bi-bookmark-star" color="pink" class="mb-6">
+            @if(empty($globalServiceCatalog))
+                <p class="dg-muted mb-0" style="font-size:14px">Aucun forfait n’est proposé. Cochez « Proposé en forfait sur la facture personnalisée » sur un service, dans <a href="{{ route('admin.commercial.module', 'services') }}">Mes services</a>.</p>
+            @else
+                <div class="forfait-grid">
+                    @foreach($globalServiceCatalog as $code => $service)
+                        <label class="forfait-option">
+                            <input type="checkbox" name="global_services[]" value="{{ $code }}" class="form-check-input global-service" data-price="{{ (float) $service['price'] }}" @checked(in_array($code, $selectedServices, true))>
+                            <span class="flex-grow-1">{{ $service['label'] }}</span>
+                            <strong>{{ money($service['price']) }}</strong>
+                        </label>
+                    @endforeach
+                </div>
+            @endif
+        </x-dg.card>
+
+        <div class="custom-summary">
+            <x-dg.card title="Paiement reçu à la création" icon="bi-cash-coin" color="green">
+                <div class="row g-3">
+                    <div class="col-md-6"><label class="form-label" for="paidAmount">Montant payé maintenant</label><input id="paidAmount" name="paid_amount" type="number" class="form-control" min="0" step="0.01" value="{{ old('paid_amount', $isEdit ? (float) $invoice->paid_amount : 0) }}"></div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="paymentChannel">Reçu en</label>
+                        <select id="paymentChannel" name="payment_channel" class="form-select">
+                            <option value="">Sélectionner…</option>
+                            <option value="cash" @selected(old('payment_channel') === 'cash')>Espèces (caisse)</option>
+                            <option value="bank" @selected(old('payment_channel') === 'bank')>Banque</option>
+                        </select>
+                    </div>
+                    <div class="col-12 d-none" id="cashAccountField">
+                        <label class="form-label" for="cashAccount">Caisse</label>
+                        <select id="cashAccount" name="cash_account_id" class="form-select">
+                            <option value="">Sélectionner une caisse…</option>
+                            @foreach($cashAccounts as $account)
+                                <option value="{{ $account->id }}" @selected((string) old('cash_account_id') === (string) $account->id)>{{ $account->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-12 d-none" id="bankAccountField">
+                        <label class="form-label" for="bankAccount">Banque</label>
+                        <select id="bankAccount" name="bank_account_id" class="form-select">
+                            <option value="">Sélectionner une banque…</option>
+                            @foreach($bankAccounts as $account)
+                                <option value="{{ $account->id }}" @selected((string) old('bank_account_id') === (string) $account->id)>{{ $account->name }}{{ $account->bank_name ? ' - ' . $account->bank_name : '' }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+                <p class="dg-muted mt-3 mb-0" style="font-size:13px">Laissez 0 si rien n’a été payé : un paiement verrouille la facture, qui ne pourra plus être modifiée.</p>
+            </x-dg.card>
+
+            <div class="dg-card custom-totals">
+                <div class="custom-totals__row"><span>Lignes HT</span><strong id="linesTotal">0</strong></div>
+                <div class="custom-totals__row"><span>Forfaits</span><strong id="servicesTotal">0</strong></div>
+                <div class="custom-totals__row custom-totals__row--sep"><span>Total HT</span><strong id="subtotalValue">0</strong></div>
+                <div class="custom-totals__row">
+                    <label for="discountType" class="mb-0">Remise</label>
+                    <span class="d-flex gap-2">
+                        <select id="discountType" name="discount_type" class="form-select form-select-sm" style="width:120px">
+                            <option value="none" @selected($discountType === 'none')>Aucune</option>
+                            <option value="percent" @selected($discountType === 'percent')>En %</option>
+                            <option value="amount" @selected($discountType === 'amount')>Montant</option>
+                        </select>
+                        <input id="discountValueInput" name="discount_value" type="number" class="form-control form-control-sm" style="width:120px" min="0" step="0.01" value="{{ $discountValue }}" aria-label="Valeur de la remise">
+                    </span>
+                </div>
+                <div class="custom-totals__row"><span>Montant de la remise</span><strong id="discountValue">0</strong></div>
+                <div class="custom-totals__row"><span>Montant net HT</span><strong id="netAfterDiscountValue">0</strong></div>
+                <div class="custom-totals__row">
+                    <label for="taxRate" class="mb-0">TVA</label>
+                    <select id="taxRate" name="tax_rate_id" class="form-select form-select-sm" style="width:170px">
+                        @foreach($taxRates as $rate)
+                            <option value="{{ $rate->id }}" data-rate="{{ $rate->isZeroRated() ? 0 : (float) $rate->rate }}" @selected($selectedRate ? (string) $selectedRate === (string) $rate->id : $rate->is_default)>{{ $rate->name }}@if(!$rate->isZeroRated()) ({{ rtrim(rtrim(number_format((float) $rate->rate, 3, ',', ' '), '0'), ',') }} %)@endif</option>
                         @endforeach
-                        <option value="new" {{ old('customer', $isEdit ? 'new' : '') === 'new' ? 'selected' : '' }}>Nouveau client</option>
                     </select>
                 </div>
-                <div class="col-md-4 new-client-field" style="display:none;">
-                    <label class="field-label">Nom & prénom</label>
-                    <input type="text" name="new_client_name" class="form-control" value="{{ old('new_client_name', $invoice?->client_name ?? '') }}" placeholder="Nom & prénom" />
-                </div>
-                <div class="col-md-4 new-client-field" style="display:none;">
-                    <label class="field-label">Téléphone / WhatsApp</label>
-                    <input type="text" name="new_client_phone" class="form-control" value="{{ old('new_client_phone', $invoice?->client_phone ?? '') }}" placeholder="Numéro" />
-                </div>
-                <div class="col-md-4 new-client-field" style="display:none;">
-                    <label class="field-label">Email</label>
-                    <input type="email" name="new_client_email" class="form-control" value="{{ old('new_client_email', $invoice?->client_email ?? '') }}" placeholder="Email" />
-                </div>
-                <div class="col-md-4">
-                    <label class="field-label">Date de création</label>
-                    <input type="date" name="quote_date" class="form-control" value="{{ old('quote_date', $invoice?->quote_date?->format('Y-m-d') ?? date('Y-m-d')) }}" />
-                </div>
-                <div class="col-md-4">
-                    <label class="field-label">Date limite</label>
-                    <input type="date" name="valid_until" class="form-control" value="{{ old('valid_until', $invoice?->valid_until?->format('Y-m-d') ?? date('Y-m-d', strtotime('+30 days'))) }}" />
-                </div>
+                <div class="custom-totals__row"><span>Montant de TVA</span><strong id="vatValue">0</strong></div>
+                <div class="custom-totals__grand"><span>Total TTC</span><strong id="grandTotalValue">0</strong></div>
+                <button type="submit" class="dg-btn dg-btn--primary dg-btn--block mt-4"><i class="bi bi-check-lg"></i>Enregistrer la facture</button>
             </div>
-        </div>
-
-        <div class="custom-invoice-section mb-4">
-            <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
-                <h3 class="h5 fw-bold text-dark mb-0">Détails contractuels</h3>
-            </div>
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <label class="field-label">Termes de paiement</label>
-                    <textarea name="payment_terms" class="form-control" rows="3" placeholder="Ex: 50% à la commande, 50% à la livraison...">{{ old('payment_terms', $invoice?->payment_terms ?? '') }}</textarea>
-                </div>
-                <div class="col-md-4">
-                    <label class="field-label">Termes de livraison</label>
-                    <textarea name="delivery_terms" class="form-control" rows="3" placeholder="Ex: Livraison à domicile, transport inclus...">{{ old('delivery_terms', $invoice?->delivery_terms ?? '') }}</textarea>
-                </div>
-                <div class="col-md-4">
-                    <label class="field-label">Lieu de livraison</label>
-                    <textarea name="delivery_location" class="form-control" rows="3" placeholder="Adresse exacte de livraison">{{ old('delivery_location', $invoice?->delivery_location ?? '') }}</textarea>
-                </div>
-                <div class="col-md-4">
-                    <label class="field-label">Méthode de paiement</label>
-                    <select name="payment_method" class="form-select">
-                        <option value="">Sélectionner...</option>
-                        <option value="Espèces" {{ old('payment_method', $invoice?->payment_method ?? '') == 'Espèces' ? 'selected' : '' }}>Espèces</option>
-                        <option value="Chèque" {{ old('payment_method', $invoice?->payment_method ?? '') == 'Chèque' ? 'selected' : '' }}>Chèque</option>
-                        <option value="Virement" {{ old('payment_method', $invoice?->payment_method ?? '') == 'Virement' ? 'selected' : '' }}>Virement</option>
-                        <option value="Carte bancaire" {{ old('payment_method', $invoice?->payment_method ?? '') == 'Carte bancaire' ? 'selected' : '' }}>Carte bancaire</option>
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="field-label">Objet / type de document</label>
-                    <input type="text" name="objet" class="form-control" value="{{ old('objet', $invoice?->subject ?? '') }}" placeholder="Ex: Livre, brochure, catalogue..." />
-                </div>
-            </div>
-        </div>
-
-        <div class="custom-invoice-section mb-4">
-            <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
-                <h3 class="h5 fw-bold text-dark mb-0">Services supplémentaires</h3>
-            </div>
-            <div class="row g-2">
-                @forelse($globalServiceCatalog ?? [] as $code => $service)
-                <div class="col-md-6">
-                    <label class="service-option">
-                        <input type="checkbox" name="global_services[]" value="{{ $code }}" class="global-service"
-                               data-price="{{ (float) $service['price'] }}"
-                               {{ in_array($code, $invoiceServices, true) ? 'checked' : '' }}>
-                        <span>{{ $service['label'] }} - <strong>{{ money($service['price']) }}</strong></span>
-                    </label>
-                </div>
-                @empty
-                <div class="col-12">
-                    <div class="text-muted fs-7 py-3">
-                        Aucune prestation forfaitaire n'est configurée. Ajoutez-les depuis le module
-                        Services en cochant « proposée sur les factures ».
-                    </div>
-                </div>
-                @endforelse
-            </div>
-            <div class="totals-box mt-4" id="servicesTotalBox" style="display:none;">
-                <div class="text-uppercase text-muted fs-8 fw-bold mb-2">Services additionnels</div>
-                <div class="summary-total" id="servicesTotalValue">0 {{ currency_symbol() }}</div>
-            </div>
-        </div>
-
-        <div class="custom-invoice-section mb-4">
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
-                <h3 class="h5 fw-bold text-dark mb-0">Articles et caractéristiques</h3>
-            </div>
-
-            <div id="itemsContainer" class="d-flex flex-column gap-4">
-                <div class="custom-invoice-item item-row order-0" data-index="0">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="field-label">Type de document</label>
-                            <select name="items[0][book_type]" class="form-select book-type">
-                                <option value="">Sélectionner</option>
-                                        <option value="livre" {{ old('items.0.book_type', $invoiceItems[0]['book_type'] ?? '') == 'livre' ? 'selected' : '' }}>Livre</option>
-                                        <option value="bloc_note" {{ old('items.0.book_type', $invoiceItems[0]['book_type'] ?? '') == 'bloc_note' ? 'selected' : '' }}>Bloc note</option>
-                                        <option value="planner" {{ old('items.0.book_type', $invoiceItems[0]['book_type'] ?? '') == 'planner' ? 'selected' : '' }}>Planner</option>
-                                        <option value="revue" {{ old('items.0.book_type', $invoiceItems[0]['book_type'] ?? '') == 'revue' ? 'selected' : '' }}>Revue</option>
-                                        <option value="catalogue" {{ old('items.0.book_type', $invoiceItems[0]['book_type'] ?? '') == 'catalogue' ? 'selected' : '' }}>Catalogue</option>
-                                        <option value="brochure" {{ old('items.0.book_type', $invoiceItems[0]['book_type'] ?? '') == 'brochure' ? 'selected' : '' }}>Brochure</option>
-                                        <option value="autre" {{ old('items.0.book_type', $invoiceItems[0]['book_type'] ?? '') == 'autre' ? 'selected' : '' }}>Autre</option>
-                            </select>
-                                    <input type="text" name="items[0][book_type_other]" class="form-control mt-2 other-field" value="{{ old('items.0.book_type_other', $invoiceItems[0]['book_type_other'] ?? '') }}" placeholder="Précisez le type" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="field-label">Type de papier souhaité</label>
-                            <div class="d-flex flex-wrap gap-2 mb-2">
-                                <label class="form-check form-check-inline"><input class="form-check-input" type="radio" name="items[0][paper_type]" value="bouffant_creme" {{ old('items.0.paper_type', $invoiceItems[0]['paper_type'] ?? 'bouffant_creme') == 'bouffant_creme' ? 'checked' : '' }}> <span>bouffant crème 80g</span></label>
-                                <label class="form-check form-check-inline"><input class="form-check-input" type="radio" name="items[0][paper_type]" value="offset_blanc" {{ old('items.0.paper_type', $invoiceItems[0]['paper_type'] ?? 'bouffant_creme') == 'offset_blanc' ? 'checked' : '' }}> <span>offset blanc 80g</span></label>
-                                <label class="form-check form-check-inline"><input class="form-check-input" type="radio" name="items[0][paper_type]" value="couche_120g" {{ old('items.0.paper_type', $invoiceItems[0]['paper_type'] ?? 'bouffant_creme') == 'couche_120g' ? 'checked' : '' }}> <span>couché 120g</span></label>
-                                <label class="form-check form-check-inline"><input class="form-check-input" type="radio" name="items[0][paper_type]" value="autre" {{ old('items.0.paper_type', $invoiceItems[0]['paper_type'] ?? 'bouffant_creme') == 'autre' ? 'checked' : '' }}> <span>Autre</span></label>
-                            </div>
-                            <input type="text" name="items[0][paper_type_other]" class="form-control other-field" value="{{ old('items.0.paper_type_other', $invoiceItems[0]['paper_type_other'] ?? '') }}" placeholder="Autre type de papier et grammage" />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="field-label">Nombre de pages</label>
-                            <input type="number" name="items[0][page_count]" class="form-control" min="1" value="{{ old('items.0.page_count', $invoiceItems[0]['page_count'] ?? 100) }}" />
-                        </div>
-                        <div class="col-md-3">
-                            <label class="field-label">Impression</label>
-                            <div class="d-flex flex-wrap gap-2">
-                                <label class="form-check form-check-inline"><input class="form-check-input" type="radio" name="items[0][printing_type]" value="noir_blanc" {{ old('items.0.printing_type', $invoiceItems[0]['printing_type'] ?? 'noir_blanc') == 'noir_blanc' ? 'checked' : '' }}> <span>NB</span></label>
-                                <label class="form-check form-check-inline"><input class="form-check-input" type="radio" name="items[0][printing_type]" value="couleur" {{ old('items.0.printing_type', $invoiceItems[0]['printing_type'] ?? 'noir_blanc') == 'couleur' ? 'checked' : '' }}> <span>Couleur</span></label>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="field-label">Type de couverture</label>
-                            <div class="d-flex flex-wrap gap-2">
-                                <label class="form-check form-check-inline"><input class="form-check-input" type="radio" name="items[0][cover_type]" value="couche_300g" {{ old('items.0.cover_type', $invoiceItems[0]['cover_type'] ?? 'couche_300g') == 'couche_300g' ? 'checked' : '' }}> <span>300g</span></label>
-                                <label class="form-check form-check-inline"><input class="form-check-input" type="radio" name="items[0][cover_type]" value="rigide_cartonnee" {{ old('items.0.cover_type', $invoiceItems[0]['cover_type'] ?? 'couche_300g') == 'rigide_cartonnee' ? 'checked' : '' }}> <span>Rigide</span></label>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="field-label">Format</label>
-                            <select name="items[0][book_format]" class="form-select book-format">
-                                <option value="poche_11x18" {{ old('items.0.book_format', $invoiceItems[0]['book_format'] ?? 'poche_11x18') == 'poche_11x18' ? 'selected' : '' }}>Poche 11x18</option>
-                                <option value="digest_12x19" {{ old('items.0.book_format', $invoiceItems[0]['book_format'] ?? 'poche_11x18') == 'digest_12x19' ? 'selected' : '' }}>Digest 12,5x19,5</option>
-                                <option value="a5_14x21" {{ old('items.0.book_format', $invoiceItems[0]['book_format'] ?? 'poche_11x18') == 'a5_14x21' ? 'selected' : '' }}>A5 14x21</option>
-                                <option value="royal_16x24" {{ old('items.0.book_format', $invoiceItems[0]['book_format'] ?? 'poche_11x18') == 'royal_16x24' ? 'selected' : '' }}>Royal 16x24</option>
-                                <option value="autre" {{ old('items.0.book_format', $invoiceItems[0]['book_format'] ?? 'poche_11x18') == 'autre' ? 'selected' : '' }}>Autre</option>
-                            </select>
-                            <input type="text" name="items[0][format_other]" class="form-control mt-2 other-field" value="{{ old('items.0.format_other', $invoiceItems[0]['format_other'] ?? '') }}" placeholder="Précisez le format" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="field-label">Pelliculage</label>
-                            <div class="d-flex flex-wrap gap-2">
-                                <label class="form-check form-check-inline"><input class="form-check-input" type="radio" name="items[0][lamination]" value="brillant" {{ old('items.0.lamination', $invoiceItems[0]['lamination'] ?? 'brillant') == 'brillant' ? 'checked' : '' }}> <span>Brillant</span></label>
-                                <label class="form-check form-check-inline"><input class="form-check-input" type="radio" name="items[0][lamination]" value="mat" {{ old('items.0.lamination', $invoiceItems[0]['lamination'] ?? 'brillant') == 'mat' ? 'checked' : '' }}> <span>Mat</span></label>
-                                <label class="form-check form-check-inline"><input class="form-check-input" type="radio" name="items[0][lamination]" value="aucun" {{ old('items.0.lamination', $invoiceItems[0]['lamination'] ?? 'brillant') == 'aucun' ? 'checked' : '' }}> <span>Aucun</span></label>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="field-label">Type de reliure</label>
-                            <select name="items[0][binding_type]" class="form-select binding-type">
-                                <option value="dos_carre_colle" {{ old('items.0.binding_type', $invoiceItems[0]['binding_type'] ?? 'dos_carre_colle') == 'dos_carre_colle' ? 'selected' : '' }}>Dos carré collé</option>
-                                <option value="points_metalliques" {{ old('items.0.binding_type', $invoiceItems[0]['binding_type'] ?? 'dos_carre_colle') == 'points_metalliques' ? 'selected' : '' }}>Points métalliques</option>
-                                <option value="spirale_metallique" {{ old('items.0.binding_type', $invoiceItems[0]['binding_type'] ?? 'dos_carre_colle') == 'spirale_metallique' ? 'selected' : '' }}>Spirale métallique</option>
-                                <option value="autre" {{ old('items.0.binding_type', $invoiceItems[0]['binding_type'] ?? 'dos_carre_colle') == 'autre' ? 'selected' : '' }}>Autre</option>
-                            </select>
-                            <input type="text" name="items[0][binding_other]" class="form-control mt-2 other-field" value="{{ old('items.0.binding_other', $invoiceItems[0]['binding_other'] ?? '') }}" placeholder="Précisez le type de reliure" />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="field-label">Options supplémentaires</label>
-                            <textarea name="items[0][additional_options]" class="form-control" rows="3" placeholder="Autres spécifications ou exigences...">{{ old('items.0.additional_options', $invoiceItems[0]['additional_options'] ?? '') }}</textarea>
-                        </div>
-                    </div>
-
-                    <div class="row g-3 mt-1 align-items-end">
-                        <div class="col-md-2">
-                            <label class="field-label">Catégorie</label>
-                            <select name="items[0][item_category]" class="form-select">
-                                <option value="impression" {{ old('items.0.item_category', $invoiceItems[0]['item_category'] ?? 'impression') == 'impression' ? 'selected' : '' }}>Impression</option>
-                                <option value="livre" {{ old('items.0.item_category', $invoiceItems[0]['item_category'] ?? 'impression') == 'livre' ? 'selected' : '' }}>Livre</option>
-                                <option value="brochure" {{ old('items.0.item_category', $invoiceItems[0]['item_category'] ?? 'impression') == 'brochure' ? 'selected' : '' }}>Brochure</option>
-                                <option value="catalogue" {{ old('items.0.item_category', $invoiceItems[0]['item_category'] ?? 'impression') == 'catalogue' ? 'selected' : '' }}>Catalogue</option>
-                                <option value="autre" {{ old('items.0.item_category', $invoiceItems[0]['item_category'] ?? 'impression') == 'autre' ? 'selected' : '' }}>Autre</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="field-label">Article</label>
-                            <input type="text" name="items[0][item_name]" class="form-control" value="{{ old('items.0.item_name', $invoiceItems[0]['item_name'] ?? 'Impression de livre') }}" />
-                        </div>
-                        <div class="col-md-2">
-                            <label class="field-label">Unité</label>
-                            <input type="text" name="items[0][unit]" class="form-control" value="{{ old('items.0.unit', $invoiceItems[0]['unit'] ?? 'Exemplaire') }}" />
-                        </div>
-                        <div class="col-md-2">
-                            <label class="field-label">Quantité</label>
-                            <input type="number" name="items[0][quantity]" class="form-control quantity-input" min="1" value="{{ old('items.0.quantity', $invoiceItems[0]['quantity'] ?? 1) }}" />
-                        </div>
-                        <div class="col-md-2">
-                            <label class="field-label">Prix unitaire</label>
-                            <input type="number" name="items[0][price]" class="form-control price-input" step="0.01" min="0" value="{{ old('items.0.price', $invoiceItems[0]['price'] ?? 0) }}" />
-                        </div>
-                        <div class="col-md-2 text-end">
-                            <label class="field-label">Montant net</label>
-                            <div class="fw-bold fs-5 total-line">0 {{ currency_symbol() }}</div>
-                            <button type="button" class="btn btn-sm btn-outline-danger mt-2 remove-item-btn">Supprimer</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="d-flex justify-content-end mt-4">
-                <button type="button" class="btn btn-sm btn-primary" id="addItemBtn"><i class="fas fa-plus me-2"></i>Ajouter un article</button>
-            </div>
-        </div>
-
-        <div class="totals-box mb-4">
-            <div class="row g-3 align-items-end">
-                <div class="col-md-2">
-                    <div class="text-uppercase text-muted fs-8 fw-bold">Total HT</div>
-                    <div class="summary-total" id="subtotalValue">0 {{ currency_symbol() }}</div>
-                </div>
-                <div class="col-md-2">
-                    <div class="text-uppercase text-muted fs-8 fw-bold">Remise</div>
-                    <div class="summary-total fs-3" id="discountValue">0 {{ currency_symbol() }}</div>
-                </div>
-                <div class="col-md-2">
-                    <div class="text-uppercase text-muted fs-8 fw-bold">TVA</div>
-                    <div class="summary-total fs-3" id="vatValue">0 {{ currency_symbol() }}</div>
-                </div>
-                <div class="col-md-3">
-                    <div class="text-uppercase text-muted fs-8 fw-bold">Total TTC</div>
-                    <div class="summary-total" id="grandTotalValue">0 {{ currency_symbol() }}</div>
-                </div>
-            </div>
-            <div class="row g-3 mt-2 align-items-end">
-                <div class="col-md-3">
-                    <label class="field-label">Type de remise</label>
-                    <select id="discountType" name="discount_type" class="form-select">
-                        <option value="none" {{ old('discount_type', $invoiceDefaultDiscountType) == 'none' ? 'selected' : '' }}>Aucune</option>
-                        <option value="percent" {{ old('discount_type', $invoiceDefaultDiscountType) == 'percent' ? 'selected' : '' }}>Pourcentage (%)</option>
-                        <option value="amount" {{ old('discount_type', $invoiceDefaultDiscountType) == 'amount' ? 'selected' : '' }}>Montant fixe</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="field-label">Valeur de remise</label>
-                    <input id="discountValueInput" name="discount_value" type="number" class="form-control" min="0" step="0.01" value="{{ old('discount_value', $invoice?->total_discount ?? 0) }}" />
-                </div>
-                <div class="col-md-3">
-                    <label class="field-label">Montant payé maintenant</label>
-                    <input name="paid_amount" type="number" class="form-control" min="0" step="0.01" value="{{ old('paid_amount', $invoice?->paid_amount ?? 0) }}" />
-                </div>
-            </div>
-            <div class="row g-3 mt-2 align-items-end">
-                <div class="col-md-4">
-                    <label class="field-label">Montant net après remise</label>
-                    <div class="form-control bg-light fw-bold" id="netAfterDiscountValue">0 {{ currency_symbol() }}</div>
-                </div>
-                <div class="col-md-4">
-                    <label class="field-label">Mode de paiement</label>
-                    <select name="payment_method" class="form-select">
-                        <option value="">Sélectionner...</option>
-                        <option value="cash" {{ old('payment_method', $invoice?->payment_method ?? 'cash') == 'cash' ? 'selected' : '' }}>Espèces</option>
-                        <option value="bank" {{ old('payment_method', $invoice?->payment_method ?? 'cash') == 'bank' ? 'selected' : '' }}>Banque</option>
-                    </select>
-                </div>
-            </div>
-            <div class="mt-3 text-muted small">TVA calculée au taux de 18 % sur le montant hors taxe après remise.</div>
-        </div>
-
-        <div class="d-flex justify-content-end gap-2">
-            <button type="button" class="btn btn-light">Annuler</button>
-            <button type="submit" class="btn btn-primary px-5">Enregistrer la facture</button>
         </div>
     </form>
 </div>
 
+{{-- Modèle d'une ligne : désignation et montants, puis caractéristiques d'impression repliables. --}}
+<template id="itemTemplate">
+    <div class="custom-item" data-item>
+        <div class="custom-item__main">
+            <div class="custom-item__name"><label class="form-label">Désignation</label><input class="form-control" name="items[__I__][item_name]" maxlength="255" placeholder="Ex : Impression de livre" required></div>
+            <div><label class="form-label">Catégorie</label><select class="form-select" name="items[__I__][item_category]">@foreach($options['item_category'] as $key => $label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select></div>
+            <div><label class="form-label">Unité</label><input class="form-control" name="items[__I__][unit]" maxlength="50"></div>
+            <div><label class="form-label">Qté</label><input class="form-control quantity-input" type="number" min="0.001" step="0.001" name="items[__I__][quantity]" value="1"></div>
+            <div><label class="form-label">Prix unitaire HT</label><input class="form-control price-input" type="number" min="0" step="0.01" name="items[__I__][price]" value="0"></div>
+            <div class="custom-item__total"><span class="form-label d-block">Total HT</span><strong class="total-line">0</strong></div>
+            <div class="custom-item__remove"><button type="button" class="dg-icon-btn dg-icon-btn--sm dg-icon-btn--danger remove-item-btn" title="Retirer la ligne" aria-label="Retirer la ligne"><i class="bi bi-x-lg"></i></button></div>
+        </div>
+        <details class="custom-item__specs">
+            <summary><i class="bi bi-sliders me-1"></i>Caractéristiques d’impression</summary>
+            <div class="row g-3 mt-1">
+                <div class="col-md-4"><label class="form-label">Type de document</label><select class="form-select has-other" name="items[__I__][book_type]">@foreach($options['book_type'] as $key => $label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select><input class="form-control mt-2 other-field" name="items[__I__][book_type_other]" placeholder="Précisez le type"></div>
+                <div class="col-md-4"><label class="form-label">Format</label><select class="form-select has-other" name="items[__I__][book_format]">@foreach($options['book_format'] as $key => $label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select><input class="form-control mt-2 other-field" name="items[__I__][format_other]" placeholder="Précisez le format"></div>
+                <div class="col-md-4"><label class="form-label">Nombre de pages</label><input class="form-control" type="number" min="1" name="items[__I__][page_count]"></div>
+                <div class="col-md-4"><label class="form-label">Papier</label><select class="form-select has-other" name="items[__I__][paper_type]">@foreach($options['paper_type'] as $key => $label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select><input class="form-control mt-2 other-field" name="items[__I__][paper_type_other]" placeholder="Papier et grammage"></div>
+                <div class="col-md-4"><label class="form-label">Impression</label><select class="form-select" name="items[__I__][printing_type]">@foreach($options['printing_type'] as $key => $label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select></div>
+                <div class="col-md-4"><label class="form-label">Couverture</label><select class="form-select" name="items[__I__][cover_type]">@foreach($options['cover_type'] as $key => $label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select></div>
+                <div class="col-md-4"><label class="form-label">Pelliculage</label><select class="form-select" name="items[__I__][lamination]">@foreach($options['lamination'] as $key => $label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select></div>
+                <div class="col-md-4"><label class="form-label">Reliure</label><select class="form-select has-other" name="items[__I__][binding_type]">@foreach($options['binding_type'] as $key => $label)<option value="{{ $key }}">{{ $label }}</option>@endforeach</select><input class="form-control mt-2 other-field" name="items[__I__][binding_other]" placeholder="Précisez la reliure"></div>
+                <div class="col-md-4"><label class="form-label">Options supplémentaires</label><textarea class="form-control" rows="2" name="items[__I__][additional_options]"></textarea></div>
+            </div>
+        </details>
+    </div>
+</template>
+
+<style>
+    .custom-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+    .custom-item { padding: 16px; border: 1px solid var(--dg-border); border-radius: var(--dg-radius); background: #fbfcfe; }
+    .custom-item__main { display: grid; grid-template-columns: minmax(200px, 2.4fr) 1.2fr 1fr .8fr 1.2fr 1.1fr auto; gap: 12px; align-items: end; }
+    .custom-item__total { text-align: right; padding-bottom: 10px; }
+    .custom-item__total strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .custom-item__remove { padding-bottom: 6px; }
+    .custom-item__specs { margin-top: 12px; }
+    .custom-item__specs summary { cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--dg-navy); }
+    .custom-item .other-field { display: none; }
+    .forfait-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .forfait-option { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--dg-border); border-radius: var(--dg-radius); cursor: pointer; font-size: 14px; }
+    .forfait-option:has(input:checked) { border-color: #db2777; background: rgba(219, 39, 119, .05); }
+    .forfait-option .form-check-input { margin: 0; }
+    .custom-summary { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 24px; align-items: start; }
+    .custom-totals__row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; font-size: 14px; }
+    .custom-totals__row strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .custom-totals__row--sep { border-top: 1px solid var(--dg-border); margin-top: 4px; padding-top: 10px; }
+    .custom-totals__grand { display: flex; justify-content: space-between; align-items: baseline; margin-top: 8px; padding-top: 12px; border-top: 2px solid var(--dg-navy); color: var(--dg-navy); }
+    .custom-totals__grand span { font-weight: 600; font-size: 15px; }
+    .custom-totals__grand strong { font-size: 22px; white-space: nowrap; }
+    @media (max-width: 1199px) { .custom-item__main { grid-template-columns: repeat(3, minmax(0, 1fr)); } .custom-item__name { grid-column: 1 / -1; } }
+    @media (max-width: 991px) { .custom-grid, .custom-summary, .forfait-grid { grid-template-columns: 1fr; } }
+</style>
 <script>
-function showOtherField(selectEl, targetInput) {
-        const value = selectEl.value;
-        if (targetInput) {
-            targetInput.style.display = (value === 'autre' || value === 'other') ? 'block' : 'none';
-        }
-    }
+(() => {
+    const form = document.getElementById('customInvoiceForm');
+    const container = document.getElementById('itemsContainer');
+    const template = document.getElementById('itemTemplate');
+    const decimals = Number(form.dataset.decimals) || 0;
+    const money = value => Number(value || 0).toLocaleString('fr-FR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + ' ' + form.dataset.currency;
 
-    function handleDynamicFields() {
-        document.querySelectorAll('.book-type').forEach((selectEl) => {
-            const target = selectEl.parentElement.querySelector('.other-field');
-            selectEl.addEventListener('change', () => showOtherField(selectEl, target));
-            showOtherField(selectEl, target);
+    // Un champ « Autre » n'apparaît que si « Autre » est choisi.
+    const syncOther = select => {
+        const other = select.parentElement.querySelector('.other-field');
+        if (other) other.style.display = select.value === 'autre' ? 'block' : 'none';
+    };
+
+    const addItem = (item = {}) => {
+        const index = container.children.length;
+        container.insertAdjacentHTML('beforeend', template.innerHTML.replaceAll('__I__', index));
+        const row = container.lastElementChild;
+        Object.entries(item || {}).forEach(([key, value]) => {
+            const field = row.querySelector('[name="items[' + index + '][' + key + ']"]');
+            if (field && value !== null && value !== undefined) field.value = value;
         });
+        row.querySelectorAll('.has-other').forEach(syncOther);
+        // Les caractéristiques déjà renseignées restent visibles.
+        if (item && (item.book_type || item.additional_options)) row.querySelector('details').open = true;
+        return row;
+    };
 
-        document.querySelectorAll('.book-format').forEach((selectEl) => {
-            const target = selectEl.parentElement.querySelector('.other-field');
-            selectEl.addEventListener('change', () => showOtherField(selectEl, target));
-            showOtherField(selectEl, target);
-        });
-
-        document.querySelectorAll('.binding-type').forEach((selectEl) => {
-            const target = selectEl.parentElement.querySelector('.other-field');
-            selectEl.addEventListener('change', () => showOtherField(selectEl, target));
-            showOtherField(selectEl, target);
-        });
-
-        document.querySelectorAll('input[type="radio"]').forEach((radio) => {
-            radio.addEventListener('change', function () {
-                const container = this.closest('.custom-invoice-item');
-                if (!container) return;
-                const other = container.querySelectorAll('input[type="text"].other-field');
-                other.forEach((field) => {
-                    field.style.display = 'none';
-                });
-                const selected = container.querySelector('input[type="radio"]:checked');
-                if (selected && selected.value === 'autre') {
-                    const input = selected.closest('label').parentElement.parentElement.querySelector('.other-field');
-                    if (input) input.style.display = 'block';
-                }
+    const reindex = () => {
+        [...container.children].forEach((row, index) => {
+            row.querySelectorAll('[name^="items["]').forEach(field => {
+                field.name = field.name.replace(/^items\[\d+\]/, 'items[' + index + ']');
             });
         });
-    }
+    };
 
-    function formatMoney(value) {window.formatMoney(return Number(value || 0));
-    }
-
-    function recalculateTotals() {
-        let subtotal = 0;
-        document.querySelectorAll('.item-row').forEach((row) => {
-            const qty = Number(row.querySelector('.quantity-input')?.value || 0);
-            const price = Number(row.querySelector('.price-input')?.value || 0);
-            const amount = qty * price;
-            subtotal += amount;
-            const totalEl = row.querySelector('.total-line');
-            if (totalEl) totalEl.textContent = formatMoney(amount);
+    const recalculate = () => {
+        let lines = 0;
+        container.querySelectorAll('[data-item]').forEach(row => {
+            const amount = (Number(row.querySelector('.quantity-input').value) || 0) * (Number(row.querySelector('.price-input').value) || 0);
+            row.querySelector('.total-line').textContent = money(amount);
+            lines += amount;
         });
+        let services = 0;
+        document.querySelectorAll('.global-service:checked').forEach(box => { services += Number(box.dataset.price) || 0; });
+        const base = lines + services;
+        const type = document.getElementById('discountType').value;
+        const value = Number(document.getElementById('discountValueInput').value) || 0;
+        const discount = Math.min(base, type === 'percent' ? base * value / 100 : (type === 'amount' ? value : 0));
+        const net = base - discount;
+        const rate = Number(document.getElementById('taxRate').selectedOptions[0]?.dataset.rate) || 0;
+        const vat = net * rate / 100;
+        document.getElementById('linesTotal').textContent = money(lines);
+        document.getElementById('servicesTotal').textContent = money(services);
+        document.getElementById('subtotalValue').textContent = money(base);
+        document.getElementById('discountValue').textContent = money(discount);
+        document.getElementById('netAfterDiscountValue').textContent = money(net);
+        document.getElementById('vatValue').textContent = money(vat);
+        document.getElementById('grandTotalValue').textContent = money(net + vat);
+    };
 
-        let servicesTotal = 0;
-        document.querySelectorAll('.global-service:checked').forEach((checkbox) => {
-            servicesTotal += Number(checkbox.dataset.price || 0);
-        });
+    // Client : les champs libres ne servent que pour un client hors carnet.
+    const customer = document.getElementById('customer');
+    const syncCustomer = () => document.querySelectorAll('.new-client-field').forEach(field => field.classList.toggle('d-none', customer.value !== 'new'));
+    customer.addEventListener('change', syncCustomer);
 
-        const servicesBox = document.getElementById('servicesTotalBox');
-        const servicesValue = document.getElementById('servicesTotalValue');
-        if (servicesBox && servicesValue) {
-            if (servicesTotal > 0) {
-                servicesBox.style.display = 'block';
-                servicesValue.textContent = formatMoney(servicesTotal);
-            } else {
-                servicesBox.style.display = 'none';
-                servicesValue.textContent = window.formatMoney(0);
-            }
+    // Paiement immédiat : caisse ou banque.
+    const channel = document.getElementById('paymentChannel');
+    const syncChannel = () => {
+        document.getElementById('cashAccountField').classList.toggle('d-none', channel.value !== 'cash');
+        document.getElementById('bankAccountField').classList.toggle('d-none', channel.value !== 'bank');
+    };
+    channel.addEventListener('change', syncChannel);
+
+    document.getElementById('addItemBtn').addEventListener('click', () => { addItem().querySelector('input').focus(); recalculate(); });
+    container.addEventListener('change', event => { if (event.target.matches('.has-other')) syncOther(event.target); });
+    container.addEventListener('click', event => {
+        if (!event.target.closest('.remove-item-btn')) return;
+        if (container.children.length > 1) {
+            event.target.closest('[data-item]').remove();
+            reindex();
+            recalculate();
         }
-
-        const baseAmount = subtotal + servicesTotal;
-        const discountType = document.getElementById('discountType')?.value || 'none';
-        const discountValueInput = document.getElementById('discountValueInput');
-        const discountValue = Number(discountValueInput?.value || 0);
-
-        let discountAmount = 0;
-        if (discountType === 'percent') {
-            discountAmount = baseAmount * (discountValue / 100);
-        } else if (discountType === 'amount') {
-            discountAmount = discountValue;
-        }
-
-        const netAfterDiscount = Math.max(baseAmount - discountAmount, 0);
-        const vat = netAfterDiscount * 0.18;
-        const grandTotal = netAfterDiscount + vat;
-
-        const subtotalEl = document.getElementById('subtotalValue');
-        const discountEl = document.getElementById('discountValue');
-        const vatEl = document.getElementById('vatValue');
-        const grandTotalEl = document.getElementById('grandTotalValue');
-        const netAfterDiscountEl = document.getElementById('netAfterDiscountValue');
-
-        if (subtotalEl) subtotalEl.textContent = formatMoney(baseAmount);
-        if (discountEl) discountEl.textContent = formatMoney(discountAmount);
-        if (vatEl) vatEl.textContent = formatMoney(vat);
-        if (grandTotalEl) grandTotalEl.textContent = formatMoney(grandTotal);
-        if (netAfterDiscountEl) netAfterDiscountEl.textContent = formatMoney(netAfterDiscount);
-    }
-
-    function addItemRow() {
-        const container = document.getElementById('itemsContainer');
-        const rows = container.querySelectorAll('.item-row');
-        const nextIndex = rows.length;
-        const firstRow = rows[0];
-        const newRow = firstRow.cloneNode(true);
-        newRow.dataset.index = nextIndex;
-        newRow.classList.remove('order-0');
-        newRow.classList.add('order-1');
-
-        newRow.querySelectorAll('input, select, textarea').forEach((field) => {
-            const name = field.getAttribute('name');
-            if (!name) return;
-            const updatedName = name.replace(/items\[\d+\]/, 'items[' + nextIndex + ']');
-            field.setAttribute('name', updatedName);
-            if (field.type === 'radio') {
-                field.checked = false;
-            } else if (field.tagName !== 'SELECT' && field.name && field.name.includes('paper_type')) {
-                field.value = '';
-            } else if (field.classList.contains('quantity-input')) {
-                field.value = 1;
-            } else if (field.classList.contains('price-input')) {
-                field.value = 0;
-            } else if (field.classList.contains('form-control') || field.classList.contains('form-select')) {
-                field.value = '';
-            }
-        });
-
-        const totalEL = newRow.querySelector('.total-line');
-        if (totalEL) totalEL.textContent = window.formatMoney(0);
-
-        container.appendChild(newRow);
-        Array.from(container.children).forEach((child, index) => {
-            child.classList.remove('order-0', 'order-1');
-            child.classList.add(index === 0 ? 'order-0' : 'order-1');
-        });
-        handleDynamicFields();
-        recalculateTotals();
-    }
-
-    document.addEventListener('DOMContentLoaded', function () {
-        const customerSelect = document.querySelector('select[name="customer"]');
-        if (customerSelect) {
-            customerSelect.addEventListener('change', function () {
-                const isNew = this.value === 'new';
-                document.querySelectorAll('.new-client-field').forEach((field) => {
-                    field.style.display = isNew ? 'block' : 'none';
-                });
-            });
-        }
-
-        const itemsContainer = document.getElementById('itemsContainer');
-        if (itemsContainer) {
-            itemsContainer.addEventListener('click', function (event) {
-                const removeBtn = event.target.closest('.remove-item-btn');
-                if (!removeBtn) return;
-
-                const row = removeBtn.closest('.item-row');
-                const rows = itemsContainer.querySelectorAll('.item-row');
-                if (rows.length > 1 && row) {
-                    row.remove();
-                    Array.from(itemsContainer.children).forEach((child, index) => {
-                        child.classList.remove('order-0', 'order-1');
-                        child.classList.add(index === 0 ? 'order-0' : 'order-1');
-                    });
-                    recalculateTotals();
-                }
-            });
-        }
-
-        document.getElementById('addItemBtn')?.addEventListener('click', addItemRow);
-
-        document.querySelectorAll('.global-service, .quantity-input, .price-input, #discountType, #discountValueInput').forEach((el) => {
-            el.addEventListener('input', recalculateTotals);
-            el.addEventListener('change', recalculateTotals);
-        });
-
-        handleDynamicFields();
-        recalculateTotals();
     });
+    form.addEventListener('input', recalculate);
+    form.addEventListener('change', recalculate);
+
+    const items = @json($items);
+    (items.length ? items : [{}]).forEach(addItem);
+    syncCustomer();
+    syncChannel();
+    recalculate();
+})();
 </script>
 @endsection

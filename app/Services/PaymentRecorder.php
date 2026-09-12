@@ -32,7 +32,8 @@ class PaymentRecorder
             'amount' => round($amount, 2),
             'method' => in_array($method, ['cash', 'bank', 'transfer'], true) ? $method : 'cash',
             'paid_on' => ($paidOn ?: now())->format('Y-m-d'),
-            'currency' => $invoice->currency ?: 'XOF',
+            // Sans devise propre (facture personnalisée), celle de l'entreprise.
+            'currency' => $invoice->currency ?: app(TaxService::class)->currencyFor($invoice->entreprise),
             'reference' => $reference,
             'created_by_user_id' => $userId,
         ]);

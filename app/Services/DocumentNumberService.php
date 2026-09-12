@@ -21,6 +21,7 @@ class DocumentNumberService
         'custom_invoice' => ['prefix' => 'FC', 'period' => 'Ymd', 'pad' => 4],
         'quote' => ['prefix' => 'DEV', 'period' => 'Ymd', 'pad' => 4],
         'proforma' => ['prefix' => 'PRO', 'period' => 'Ymd', 'pad' => 4],
+        'order' => ['prefix' => 'BC', 'period' => 'Ymd', 'pad' => 4],
         'invoice' => ['prefix' => 'FAC', 'period' => 'Y', 'pad' => 5],
         'credit_note' => ['prefix' => 'AV', 'period' => 'Y', 'pad' => 5],
         'pos_sale' => ['prefix' => 'POS', 'period' => 'Ymd', 'pad' => 4],

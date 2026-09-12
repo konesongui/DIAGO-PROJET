@@ -101,7 +101,8 @@ class InvoiceIntegrityService
             ));
         }
 
-        $currency = $invoice->currency ?: 'XOF';
+        // Une facture personnalisée n'a pas de devise propre : c'est celle de l'entreprise.
+        $currency = $invoice->currency ?: $this->taxes->currencyFor($invoice->entreprise);
         $rate = (float) ($invoice->tax_rate ?? 0);
 
         // Le montant saisi est un TTC : on en extrait la taxe au taux d'origine.
