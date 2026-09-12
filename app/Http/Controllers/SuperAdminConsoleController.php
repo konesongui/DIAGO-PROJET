@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Entreprise;
+use App\Services\EntrepriseProvisioner;
 use App\Models\AuditLog;
 use App\Models\LandingSetting;
 use App\Models\Role;
@@ -295,41 +296,29 @@ class SuperAdminConsoleController extends Controller
             'ai_assistant_enabled' => ['nullable', 'boolean'],
         ]);
 
-        $adminRole = Role::where('name', 'admin')->firstOrFail();
-        $slug = $validated['slug'] ?: Str::slug($validated['company_name']);
+        $slug = app(EntrepriseProvisioner::class)->slugFor($validated['company_name'], $validated['slug'] ?? null);
 
         if (Entreprise::where('slug', $slug)->exists()) {
             return back()->withInput()->withErrors(['slug' => 'Ce slug est déjà utilisé.']);
         }
 
-        DB::transaction(function () use ($validated, $adminRole, $slug) {
-            $entreprise = Entreprise::create([
-                'name' => $validated['company_name'],
-                'slug' => $slug,
-                'database_name' => $validated['database_name'] ?? null,
-                'is_active' => true,
-                'created_by' => auth()->id(),
-                'settings' => [
-                    'locale' => 'fr',
-                    'trade_name' => $validated['trade_name'] ?? null,
-                    'phone' => $validated['phone'],
-                    'address' => $validated['address'],
-                    'city' => $validated['city'],
-                    'subscription_expires_at' => $validated['subscription_expires_at'],
-                    'enabled_rubriques' => $this->normalizeRubriques($validated['rubriques']),
-                    'ai_assistant_enabled' => !empty($validated['ai_assistant_enabled']),
-                ],
-            ]);
-
-            User::create([
-                'name' => $validated['admin_name'],
-                'email' => $validated['admin_email'],
-                'password' => Hash::make($validated['admin_password']),
-                'entreprise_id' => $entreprise->id,
-                'role_id' => $adminRole->id,
-                'is_active' => true,
-            ]);
-        });
+        // Passe par le même chemin que l'écran Entreprises : compte administrateur,
+        // rubriques, taux de taxe et plan comptable créés d'un bloc.
+        app(EntrepriseProvisioner::class)->create([
+            'name' => $validated['company_name'],
+            'slug' => $slug,
+            'trade_name' => $validated['trade_name'] ?? null,
+            'phone' => $validated['phone'],
+            'address' => $validated['address'],
+            'city' => $validated['city'],
+            'subscription_expires_at' => $validated['subscription_expires_at'],
+            'database_name' => $validated['database_name'] ?? null,
+            'rubriques' => $validated['rubriques'],
+            'ai_assistant_enabled' => ! empty($validated['ai_assistant_enabled']),
+            'admin_name' => $validated['admin_name'],
+            'admin_email' => $validated['admin_email'],
+            'admin_password' => $validated['admin_password'],
+        ], auth()->id());
 
         return redirect()->route('console.index')->with('success', 'Entreprise et compte administrateur créés avec succès.');
     }
@@ -344,23 +333,11 @@ class SuperAdminConsoleController extends Controller
 
     private function moduleRubriques(): array
     {
-        return [
-            'pilotage' => ['label' => 'Pilotage', 'description' => 'Tableau de bord et rapports de pilotage.', 'icon' => 'bi-bar-chart'],
-            'commercial' => ['label' => 'Commercial', 'description' => 'Clients, ventes, stocks et point de vente.', 'icon' => 'bi-cart'],
-            'comptabilite' => ['label' => 'Comptabilité', 'description' => 'Caisses, banques et rapports comptables.', 'icon' => 'bi-credit-card'],
-            'rh' => ['label' => 'RH & Paie', 'description' => 'Employés, services, fonctions et paie.', 'icon' => 'bi-people'],
-            'administration' => ['label' => 'Administration', 'description' => 'Administration et paramétrage de l’entreprise.', 'icon' => 'bi-gear'],
-            'succursales' => ['label' => 'Succursales', 'description' => 'Gérez les établissements et suivez leur activité.', 'icon' => 'bi-shop'],
-        ];
+        return app(EntrepriseProvisioner::class)->rubriques();
     }
 
     private function normalizeRubriques(array $rubriques): array
     {
-        $enabled = [];
-        foreach (array_keys($this->moduleRubriques()) as $key) {
-            $enabled[$key] = !empty($rubriques[$key]);
-        }
-
-        return $enabled;
+        return app(EntrepriseProvisioner::class)->normalizeRubriques($rubriques);
     }
 }

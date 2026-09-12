@@ -80,10 +80,33 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::view('/design-system', 'admin.design-system', ['title' => 'Design System'])->name('admin.design-system');
         Route::get('/recherche', GlobalSearchController::class)->name('admin.search');
         Route::get('/administration', [AdministrationController::class, 'index'])->name('admin.administration');
+        Route::get('/administration/visiteurs', [AdministrationController::class, 'visitors'])->name('admin.administration.visitors');
+        Route::post('/administration/visiteurs', [AdministrationController::class, 'storeVisitor'])->name('admin.administration.visitors.store');
+        Route::put('/administration/visiteurs/{visitor}', [AdministrationController::class, 'updateVisitor'])->name('admin.administration.visitors.update');
+        Route::post('/administration/visiteurs/{visitor}/presence', [AdministrationController::class, 'visitorPresence'])->name('admin.administration.visitors.presence');
+        Route::delete('/administration/visiteurs/{visitor}', [AdministrationController::class, 'destroyVisitor'])->name('admin.administration.visitors.destroy');
+        Route::get('/administration/appels', [AdministrationController::class, 'calls'])->name('admin.administration.calls');
+        Route::post('/administration/appels', [AdministrationController::class, 'storeCall'])->name('admin.administration.calls.store');
+        Route::put('/administration/appels/{call}', [AdministrationController::class, 'updateCall'])->name('admin.administration.calls.update');
+        Route::post('/administration/appels/{call}/suite', [AdministrationController::class, 'callStatus'])->name('admin.administration.calls.status');
+        Route::delete('/administration/appels/{call}', [AdministrationController::class, 'destroyCall'])->name('admin.administration.calls.destroy');
+        Route::get('/administration/courriers', [AdministrationController::class, 'correspondences'])->name('admin.administration.correspondences');
+        Route::post('/administration/courriers', [AdministrationController::class, 'storeCorrespondence'])->name('admin.administration.correspondences.store');
+        Route::put('/administration/courriers/{correspondence}', [AdministrationController::class, 'updateCorrespondence'])->name('admin.administration.correspondences.update');
+        Route::post('/administration/courriers/{correspondence}/suivi', [AdministrationController::class, 'correspondenceStatus'])->name('admin.administration.correspondences.status');
+        Route::delete('/administration/courriers/{correspondence}', [AdministrationController::class, 'destroyCorrespondence'])->name('admin.administration.correspondences.destroy');
+        Route::get('/administration/reunions', [AdministrationController::class, 'meetings'])->name('admin.administration.meetings');
+        Route::post('/administration/reunions', [AdministrationController::class, 'storeMeeting'])->name('admin.administration.meetings.store');
+        Route::put('/administration/reunions/{meeting}', [AdministrationController::class, 'updateMeeting'])->name('admin.administration.meetings.update');
+        Route::post('/administration/reunions/{meeting}/suite', [AdministrationController::class, 'meetingStatus'])->name('admin.administration.meetings.status');
+        Route::post('/administration/reunions/{meeting}/compte-rendu', [AdministrationController::class, 'meetingMinutes'])->name('admin.administration.meetings.minutes');
+        Route::delete('/administration/reunions/{meeting}', [AdministrationController::class, 'destroyMeeting'])->name('admin.administration.meetings.destroy');
+        Route::get('/administration/documents', [AdministrationController::class, 'documents'])->name('admin.administration.documents');
+        Route::post('/administration/documents', [AdministrationController::class, 'storeDocument'])->name('admin.administration.documents.store');
+        Route::put('/administration/documents/{document}', [AdministrationController::class, 'updateDocument'])->name('admin.administration.documents.update');
+        Route::post('/administration/documents/{document}/classement', [AdministrationController::class, 'documentStatus'])->name('admin.administration.documents.status');
+        Route::delete('/administration/documents/{document}', [AdministrationController::class, 'destroyDocument'])->name('admin.administration.documents.destroy');
         Route::get('/administration/{module}', [AdministrationController::class, 'module'])->name('admin.administration.module');
-        Route::post('/administration/{module}', [AdministrationController::class, 'store'])->name('admin.administration.store');
-        Route::put('/administration/{module}/{record}', [AdministrationController::class, 'update'])->name('admin.administration.update');
-        Route::delete('/administration/{module}/{record}', [AdministrationController::class, 'destroy'])->name('admin.administration.destroy');
         Route::get('/admin/hub', [HubController::class, 'index']);
         Route::get('/comptabilite', [ComptabiliteController::class, 'index'])->name('admin.comptabilite');
         Route::get('/admin/comptabilite', [ComptabiliteController::class, 'index']);
@@ -130,6 +153,7 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::get('/rh/bulletins-paie', [RhController::class, 'payroll'])->name('admin.rh.payroll');
         Route::get('/rh/livre-paie', [RhController::class, 'payrollBook'])->name('admin.rh.payrollBook');
         Route::get('/rh/qr-code', [RhController::class, 'displayQr'])->name('admin.rh.qr.display');
+        Route::post('/rh/qr-code/renouveler', [RhController::class, 'renewQr'])->name('admin.rh.qr.renew');
         Route::get('/rh/presences', [RhController::class, 'todayAttendance'])->name('admin.rh.attendance.today');
         Route::match(['get', 'post'], '/rh/rapport-presence', [RhController::class, 'attendanceReport'])->name('admin.rh.attendance.report');
         Route::get('/rh/bulletins-paie/create', [RhController::class, 'createPayroll'])->name('admin.rh.payroll.create');
@@ -289,7 +313,11 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         Route::patch('/users/{user}/permissions', [UserController::class, 'updatePermissions'])->name('admin.users.permissions.update');
 
         Route::middleware('super_admin')->group(function () {
-            Route::resource('entreprises', EntrepriseController::class, ['as' => 'admin'])->names([
+            Route::patch('/entreprises/{entreprise}/toggle', [EntrepriseController::class, 'toggle'])->name('admin.entreprises.toggle');
+            // Pas de route « show » : la fiche se consulte et se modifie dans le même écran.
+            Route::resource('entreprises', EntrepriseController::class, ['as' => 'admin'])
+                ->only(['index', 'create', 'store', 'edit', 'update', 'destroy'])
+                ->names([
                 'index' => 'admin.entreprises.index',
                 'create' => 'admin.entreprises.create',
                 'store' => 'admin.entreprises.store',

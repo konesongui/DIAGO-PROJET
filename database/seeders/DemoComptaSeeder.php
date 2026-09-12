@@ -16,12 +16,18 @@ use App\Models\CommercialQuote;
 use App\Models\CommercialService;
 use App\Models\CommercialSupplier;
 use App\Models\CustomInvoice;
+use App\Models\AdminCall;
+use App\Models\AdminCorrespondence;
+use App\Models\AdminDocument;
+use App\Models\AdminMeeting;
+use App\Models\AdminVisitor;
 use App\Models\Employee;
 use App\Models\Entreprise;
 use App\Models\ExpenseCategory;
 use App\Models\FixedAsset;
 use App\Models\PosSale;
 use App\Models\Role;
+use App\Models\Succursale;
 use App\Models\StockEntry;
 use App\Models\StockExit;
 use App\Models\SupplierInvoice;
@@ -127,6 +133,12 @@ class DemoComptaSeeder extends Seeder
             app(\App\Services\StockService::class)->applyInventory($this->entreprise->id, Carbon::today()->subDay()->toDateString(), 'Inventaire de fin de semaine',
                 ['ramette papier a4 80 g|papeterie · pap-a4|ramette' => 18, 'clé usb 32 go|informatique|pièce' => 26, 'classeur à levier|papeterie|pièce' => 40], $this->user->id);
             $this->fixedAssets();
+            $this->visitors();
+            $this->calls();
+            $this->correspondences();
+            $this->meetings();
+            $this->documents();
+            $this->branches();
             // Bilan de l'exercice clos, alimenté par les ventes et achats de l'année précédente.
             app(AnnualReportService::class)->reportFor($this->entreprise->id, $this->closedYear());
             $this->cashBox->save();
@@ -194,6 +206,8 @@ class DemoComptaSeeder extends Seeder
             'tax_center' => 'Plateau 1',
             'bank_name' => 'NSIA Banque',
             'bank_account' => 'CI092 01001 0039281',
+            'activity' => 'Conseil & audit financier',
+            'city' => 'Abidjan',
         ];
 
         $settings = $this->entreprise->settings ?? [];
@@ -697,6 +711,248 @@ class DemoComptaSeeder extends Seeder
             $objective->assignments()->create(['entreprise_id' => $id, 'employee_id' => $employee->id, 'amount' => $amount, 'starts_at' => $from, 'ends_at' => "{$year}-12-31"]);
         }
         CommercialObjective::create(['entreprise_id' => $id, 'amount' => 12000000, 'objective_date' => $this->closedYear() . '-01-01']);
+
+        // Congés : un congé en cours (l'employé apparaît « En congé » aujourd'hui),
+        // un congé passé et une demande encore en attente de validation.
+        $type = \App\Models\LeaveType::firstOrCreate(
+            ['entreprise_id' => $id, 'name' => 'Congé annuel'],
+            ['days' => 30, 'description' => 'Congé annuel légal, à poser en accord avec le service', 'is_active' => true]
+        );
+        $family = \App\Models\LeaveType::firstOrCreate(
+            ['entreprise_id' => $id, 'name' => 'Congé pour événement familial'],
+            ['days' => 5, 'description' => 'Mariage, naissance ou décès d’un proche', 'is_active' => true]
+        );
+        foreach ([[$koffi, -3, 8, 'approved', $type], [$awa, -40, -30, 'approved', $type], [$ali, 12, 16, 'pending', $type], [$awa, 2, 4, 'approved', $family]] as [$employee, $from, $to, $status, $leaveType]) {
+            \App\Models\LeaveRequest::create([
+                'entreprise_id' => $id, 'employee_id' => $employee->id, 'leave_type_id' => $leaveType->id,
+                'start_date' => Carbon::today()->addDays($from)->toDateString(),
+                'end_date' => Carbon::today()->addDays($to)->toDateString(),
+                'days' => $to - $from + 1, 'reason' => $leaveType->name, 'status' => $status,
+                'reviewed_by' => $status === 'approved' ? $this->user->id : null,
+            ]);
+        }
+
+        // Permissions : une acceptée, une en attente de validation.
+        foreach ([[$awa, 'medical', 0, 0, 'Rendez-vous à la polyclinique', 'approved'], [$koffi, 'administrative', 7, 7, 'Retrait de la carte nationale d’identité', 'pending']] as [$employee, $permissionType, $from, $to, $reason, $status]) {
+            \App\Models\PermissionRequest::create([
+                'entreprise_id' => $id, 'employee_id' => $employee->id, 'type' => $permissionType,
+                'start_date' => Carbon::today()->addDays($from)->toDateString(),
+                'end_date' => Carbon::today()->addDays($to)->toDateString(),
+                'reason' => $reason, 'status' => $status,
+                'reviewed_by' => $status === 'approved' ? $this->user->id : null,
+                'review_comment' => $status === 'approved' ? 'Permission enregistrée par l’administration.' : null,
+            ]);
+        }
+
+        // Catégories salariales de référence, rattachées aux fiches.
+        foreach ([['Catégorie 1A', 180000, 'Employés d’exécution'], ['Catégorie 2B', 320000, 'Agents de maîtrise'], ['Catégorie 3C', 520000, 'Cadres']] as $index => [$categoryName, $amount, $categoryDescription]) {
+            \App\Models\SalaryCategory::firstOrCreate(
+                ['entreprise_id' => $id, 'name' => $categoryName],
+                ['amount' => $amount, 'description' => $categoryDescription, 'is_active' => true]
+            );
+        }
+        foreach ([[$awa, 'Catégorie 3C', 650000], [$koffi, 'Catégorie 2B', 420000], [$ali, 'Catégorie 1A', 280000]] as [$employee, $categoryName, $salary]) {
+            $employee->update(['salary_category' => $categoryName, 'monthly_salary' => $salary, 'gender' => $employee->full_name === 'Awa Koné' ? 'F' : 'M']);
+        }
+
+        // Bulletins de paie des trois derniers mois clos.
+        foreach ([$awa, $koffi, $ali] as $employee) {
+            for ($back = 1; $back <= 3; $back++) {
+                $month = Carbon::today()->subMonths($back);
+                $base = (float) $employee->monthly_salary;
+                \App\Models\Payroll::firstOrCreate(
+                    ['entreprise_id' => $id, 'employee_id' => $employee->id, 'month' => (int) $month->format('m'), 'year' => (int) $month->format('Y')],
+                    [
+                        'base_salary' => $base, 'transport_allowance' => 25000, 'gross_salary' => round($base * 1.08),
+                        'cnps_employee' => round($base * 0.063), 'income_tax' => round($base * 0.05), 'cmu' => 1000,
+                        'net_salary' => round($base * 1.08 - $base * 0.113 - 1000), 'employer_charges' => round($base * 0.18),
+                        'payment_mode' => 'bank', 'part_igr' => 1, 'children_count' => 0,
+                    ]
+                );
+            }
+        }
+
+        // Pointages QR des cinq derniers jours ouvrés, dont un départ manquant.
+        foreach ([$awa, $koffi, $ali] as $index => $employee) {
+            for ($back = 0; $back <= 6; $back++) {
+                $day = Carbon::today()->subDays($back);
+                if ($day->isWeekend()) {
+                    continue;
+                }
+                $arrival = sprintf('0%d:%02d:00', 7 + ($index + $back) % 2, ($index * 17 + $back * 6) % 60);
+                $missingDeparture = $back === 0 && $index === 1;
+                \App\Models\StaffAttendanceQr::create([
+                    'entreprise_id' => $id, 'employee_id' => $employee->id, 'attendance_date' => $day->toDateString(),
+                    'arrival_time' => $arrival, 'departure_time' => $missingDeparture ? null : sprintf('1%d:%02d:00', 6 + $index % 2, ($back * 11) % 60),
+                    'scan_date' => $day->toDateString() . ' ' . $arrival,
+                    'status' => $missingDeparture ? 'arrival' : 'complete', 'verification_status' => 'verified',
+                    'verification_details' => 'Pointage QR validé', 'verified_at' => $day->toDateString() . ' ' . $arrival,
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Registre des visiteurs : deux visiteurs sur place, deux visites annoncées
+     * (dont une programmée), des passages terminés et une visite annulée.
+     */
+    private function visitors(): void
+    {
+        $id = $this->entreprise->id;
+        $today = Carbon::today();
+
+        foreach ([
+            ['Awa Diomandé', 'Sogex Distribution', '+225 07 08 11 22 33', 'awa.diomande@sogex.demo', 'Remise du dossier d’appel d’offres', 'Direction générale', $today->copy()->setTime(9, 12), null, null],
+            ['Jean-Baptiste Ouattara', 'Cabinet Ouattara & Associés', '+225 05 44 90 12 76', 'jb.ouattara@cabinet.demo', 'Révision des comptes annuels', 'Comptabilité', $today->copy()->setTime(10, 40), null, null],
+            ['Mariam Traoré', 'Banque Atlantique', '+225 01 23 45 67 89', null, 'Signature de la convention de compte', 'Direction financière', $today->copy()->setTime(8, 5), $today->copy()->setTime(9, 35), null],
+            ['Koffi N’Guessan', 'Ivoire Maintenance', '+225 07 77 65 43 21', null, 'Entretien du groupe électrogène', 'Services généraux', $today->copy()->subDays(2)->setTime(14, 10), $today->copy()->subDays(2)->setTime(16, 55), null],
+            ['Fatoumata Diallo', 'Direction Générale des Impôts', '+225 27 20 31 40 50', 'f.diallo@dgi.demo', 'Contrôle des déclarations de TVA', 'Comptabilité', $today->copy()->subDays(6)->setTime(9, 0), $today->copy()->subDays(6)->setTime(12, 30), null],
+            ['Serge Amani', 'Ivoire Logistique', '+225 05 09 18 27 36', null, 'Présentation de l’offre transport', 'Service commercial', $today->copy()->addDays(2)->setTime(10, 0), null, null],
+            ['Aïcha Bamba', 'Assurances Nouvelles', '+225 01 55 66 77 88', 'aicha.bamba@assurances.demo', 'Renouvellement de la flotte automobile', 'Direction générale', null, null, null],
+            ['Yao Kouadio', 'Imprimerie du Plateau', '+225 07 12 34 56 78', null, 'Livraison des carnets de factures', 'Accueil', null, null, 'cancelled'],
+        ] as [$name, $company, $phone, $email, $purpose, $host, $checkIn, $checkOut, $status]) {
+            $visitor = new AdminVisitor([
+                'entreprise_id' => $id, 'name' => $name, 'company' => $company, 'phone' => $phone, 'email' => $email,
+                'purpose' => $purpose, 'host' => $host, 'check_in_at' => $checkIn, 'check_out_at' => $checkOut,
+                'status' => $status ?? 'expected',
+            ]);
+            $visitor->syncStatus()->save();
+        }
+    }
+
+    /** Journal des appels : des manqués à rappeler, un appel à passer, des appels aboutis. */
+    private function calls(): void
+    {
+        $id = $this->entreprise->id;
+        $today = Carbon::today();
+
+        foreach ([
+            ['Sogex Distribution', '+225 07 08 11 22 33', 'Relance du bon de commande BC-2026-118', 'incoming', $today->copy()->setTime(8, 20), null, 'missed', 'Rappeler avant midi.'],
+            ['Banque Atlantique', '+225 27 20 31 40 50', 'Virement de salaires à confirmer', 'outgoing', $today->copy()->setTime(9, 5), 12, 'completed', null],
+            ['Ivoire Bureau', '+225 07 11 22 33 44', 'Disponibilité des ramettes A4', 'outgoing', $today->copy()->subDay()->setTime(15, 30), 6, 'completed', null],
+            ['Cabinet Ouattara & Associés', '+225 05 44 90 12 76', 'Pièces manquantes pour la révision', 'incoming', $today->copy()->subDays(2)->setTime(11, 10), 24, 'completed', null],
+            ['Direction Générale des Impôts', '+225 27 20 31 40 50', 'Question sur la déclaration de TVA', 'incoming', $today->copy()->subDays(3)->setTime(14, 45), null, 'missed', 'Numéro du standard, poste 214.'],
+            ['Assurances Nouvelles', '+225 01 55 66 77 88', 'Devis flotte automobile à discuter', 'outgoing', $today->copy()->addDay()->setTime(10, 0), null, 'planned', 'Demander trois niveaux de garantie.'],
+        ] as [$contact, $phone, $subject, $direction, $callAt, $duration, $status, $notes]) {
+            AdminCall::create([
+                'entreprise_id' => $id, 'contact_name' => $contact, 'phone' => $phone, 'subject' => $subject,
+                'direction' => $direction, 'call_at' => $callAt, 'duration' => $duration, 'status' => $status, 'notes' => $notes,
+            ]);
+        }
+    }
+
+    /** Courriers arrivés et partis, dont un avec sa pièce jointe numérisée. */
+    private function correspondences(): void
+    {
+        $id = $this->entreprise->id;
+        $today = Carbon::today();
+        $year = $today->year;
+
+        $path = 'administration/courriers/demo-mise-en-demeure.pdf';
+        Storage::disk('public')->put($path, Pdf::loadHTML(
+            '<html><body style="font-family:DejaVu Sans,sans-serif;font-size:12px">'
+            . '<h2>Mise en demeure</h2><p>Courrier de démonstration numérisé et rattaché au registre des courriers.</p>'
+            . '<p>Objet : règlement de la facture IB-2026-0342.</p></body></html>'
+        )->output());
+        $this->files[] = $path;
+
+        foreach ([
+            ['CR-' . $year . '-041', 'incoming', 'Mise en demeure de règlement', 'Ivoire Bureau', null, $today->copy()->subDays(4), 'received', $path, 'Transmis à la comptabilité.'],
+            ['CR-' . $year . '-042', 'incoming', 'Avis de contrôle des déclarations de TVA', 'Direction Générale des Impôts', null, $today->copy()->subDays(2), 'in_progress', null, 'Dossier préparé par la comptabilité.'],
+            ['CR-' . $year . '-043', 'outgoing', 'Réponse à l’avis de contrôle', null, 'Direction Générale des Impôts', $today->copy()->subDay(), 'processed', null, 'Remis en main propre.'],
+            ['CR-' . $year . '-044', 'outgoing', 'Offre commerciale flotte automobile', null, 'Assurances Nouvelles', $today->copy(), 'received', null, null],
+            ['CR-' . $year . '-038', 'incoming', 'Convocation à l’assemblée de quartier', 'Mairie du Plateau', null, $today->copy()->subDays(21), 'archived', null, null],
+        ] as [$reference, $type, $subject, $sender, $recipient, $date, $status, $file, $notes]) {
+            AdminCorrespondence::create([
+                'entreprise_id' => $id, 'reference' => $reference, 'type' => $type, 'subject' => $subject,
+                'sender' => $sender, 'recipient' => $recipient, 'received_at' => $date->toDateString(),
+                'status' => $status, 'file_path' => $file, 'notes' => $notes,
+            ]);
+        }
+    }
+
+    /** Réunions : une à venir, deux tenues dont une sans compte-rendu, une annulée. */
+    private function meetings(): void
+    {
+        $id = $this->entreprise->id;
+        $today = Carbon::today();
+        $participants = "Direction générale\nComptabilité\nService commercial";
+
+        foreach ([
+            ['Comité de direction', 'Salle du conseil', $today->copy()->addDays(4)->setTime(9, 0), $today->copy()->addDays(4)->setTime(11, 0), 'Direction générale', 'planned', null],
+            ['Revue des ventes du mois', 'Salle du conseil', $today->copy()->subDays(3)->setTime(15, 0), $today->copy()->subDays(3)->setTime(16, 30), 'Service commercial', 'held', "Objectif du mois atteint à 82 %.\nRelance des clients en retard de règlement confiée à Awa Koné.\nProchaine revue dans un mois."],
+            ['Point sur le contrôle fiscal', 'Bureau de la comptabilité', $today->copy()->subDay()->setTime(10, 0), $today->copy()->subDay()->setTime(11, 15), 'Comptabilité', 'held', null],
+            ['Présentation du nouveau fournisseur', 'Visioconférence', $today->copy()->subDays(8)->setTime(14, 0), $today->copy()->subDays(8)->setTime(15, 0), 'Services généraux', 'cancelled', null],
+        ] as [$title, $location, $start, $end, $organizer, $status, $minutes]) {
+            AdminMeeting::create([
+                'entreprise_id' => $id, 'title' => $title, 'location' => $location,
+                'starts_at' => $start, 'ends_at' => $end, 'organizer' => $organizer,
+                'attendees' => $participants, 'status' => $status, 'minutes' => $minutes,
+            ]);
+        }
+    }
+
+    /** Documents administratifs classés, chacun avec son fichier. */
+    private function documents(): void
+    {
+        $id = $this->entreprise->id;
+        $today = Carbon::today();
+
+        foreach ([
+            ['Statuts de la société', 'Registres légaux', $today->copy()->subYears(3)->startOfYear(), 'active', 'Statuts constitutifs déposés au greffe.'],
+            ['Registre du personnel', 'Registres légaux', $today->copy()->startOfYear(), 'active', 'Registre tenu à jour par le service RH.'],
+            ['Contrat de bail du siège', 'Contrats', $today->copy()->subYear()->startOfYear()->addMonths(2), 'active', 'Bail commercial de trois ans, renouvelable.'],
+            ['Attestation de régularité fiscale 2024', 'Attestations', $today->copy()->subYear()->startOfYear()->addMonths(6), 'archived', 'Remplacée par l’attestation de l’exercice en cours.'],
+        ] as [$title, $category, $date, $status, $description]) {
+            $path = 'administration/documents/demo-' . Str::slug($title) . '.pdf';
+            Storage::disk('public')->put($path, Pdf::loadHTML(
+                '<html><body style="font-family:DejaVu Sans,sans-serif;font-size:12px">'
+                . '<h2>' . e($title) . '</h2><p>' . e($description) . '</p>'
+                . '<p>Document de démonstration classé dans la rubrique « ' . e($category) . ' ».</p></body></html>'
+            )->output());
+            $this->files[] = $path;
+
+            AdminDocument::create([
+                'entreprise_id' => $id, 'title' => $title, 'category' => $category,
+                'document_date' => $date->toDateString(), 'status' => $status,
+                'file_path' => $path, 'description' => $description,
+            ]);
+        }
+    }
+
+    /** Deux succursales avec leur compte responsable, et la rubrique ouverte pour les voir. */
+    private function branches(): void
+    {
+        $id = $this->entreprise->id;
+        $adminRole = Role::firstOrCreate(['name' => 'admin'], ['label' => 'Administrateur']);
+
+        $settings = $this->entreprise->settings ?? [];
+        $rubriques = $settings['enabled_rubriques'] ?? null;
+        if (empty($rubriques['succursales'])) {
+            $settings['enabled_rubriques'] = array_merge($rubriques ?? [], ['succursales' => true]);
+            // Le réglage n'est repris au nettoyage que s'il n'existait pas avant.
+            if ($rubriques === null) {
+                $this->settingsAdded['enabled_rubriques'] = $settings['enabled_rubriques'];
+            }
+            $this->entreprise->update(['settings' => $settings]);
+        }
+
+        foreach ([
+            ['Agence de Cocody', 'COC', 'Boulevard Latrille, Cocody', 'Abidjan', '+225 27 22 44 55 66', 'Awa Bamba'],
+            ['Agence de Bouaké', 'BKE', 'Quartier N’Gattakro, Bouaké', 'Bouaké', '+225 27 31 63 20 10', 'Yao N’Dri'],
+        ] as [$name, $code, $address, $city, $phone, $manager]) {
+            $succursale = Succursale::create([
+                'entreprise_id' => $id, 'name' => $name, 'code' => $code,
+                'address' => $address, 'city' => $city, 'phone' => $phone, 'is_active' => true,
+            ]);
+            User::create([
+                'name' => $manager,
+                'email' => Str::slug($manager) . '.demo-' . $id . '@diago.local',
+                'password' => Hash::make(Str::random(40)),
+                'entreprise_id' => $id, 'succursale_id' => $succursale->id,
+                'role_id' => $adminRole->id, 'is_active' => true,
+            ]);
+        }
     }
 
     private function stockEntries(): void

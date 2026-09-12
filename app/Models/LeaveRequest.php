@@ -8,4 +8,5 @@ class LeaveRequest extends Model {
     protected $casts = ['start_date'=>'date','end_date'=>'date'];
     public function employee() { return $this->belongsTo(Employee::class); }
     public function leaveType() { return $this->belongsTo(LeaveType::class); }
+    public function reviewer() { return $this->belongsTo(User::class, 'reviewed_by'); }
 }

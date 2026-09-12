@@ -16,6 +16,24 @@ class PermissionRequest extends Model
 
     protected $casts = ['start_date' => 'date', 'end_date' => 'date'];
 
+    /** Motifs proposés : l'ancien champ libre rendait tout regroupement impossible. */
+    public static function types(): array
+    {
+        return [
+            'medical' => 'Rendez-vous médical',
+            'family' => 'Événement familial',
+            'administrative' => 'Démarche administrative',
+            'training' => 'Formation ou examen',
+            'other' => 'Autre motif',
+        ];
+    }
+
+    /** Libellé du motif, y compris pour les anciennes saisies libres. */
+    public function typeLabel(): string
+    {
+        return self::types()[$this->type] ?? ($this->type ?: 'Autre motif');
+    }
+
     public function employee()
     {
         return $this->belongsTo(Employee::class);

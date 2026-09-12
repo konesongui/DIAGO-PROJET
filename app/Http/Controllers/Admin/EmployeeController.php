@@ -79,20 +79,49 @@ class EmployeeController extends AdminController
         ]);
     }
 
+    /**
+     * Suppression définitive, réservée à une fiche sans historique.
+     *
+     * Les bulletins de paie, congés, permissions et pointages sont liés à
+     * l'employé en cascade : les supprimer effacerait le registre de paie.
+     * Le compte utilisateur n'est jamais supprimé non plus, car il signe les
+     * documents qu'il a créés : il est désactivé.
+     */
     public function destroy(Employee $employee)
     {
         abort_unless($employee->entreprise_id === auth()->user()->entreprise_id, 403);
-        $employee->user?->delete();
+
+        $history = collect([
+            'bulletin(s) de paie' => \App\Models\Payroll::where('employee_id', $employee->id)->count(),
+            'demande(s) de congé' => \App\Models\LeaveRequest::where('employee_id', $employee->id)->count(),
+            'demande(s) de permission' => \App\Models\PermissionRequest::where('employee_id', $employee->id)->count(),
+            'pointage(s)' => \App\Models\StaffAttendanceQr::where('employee_id', $employee->id)->count(),
+        ])->filter();
+
+        if ($history->isNotEmpty()) {
+            return back()->withErrors(['employee' => $employee->full_name . ' a un historique (' .
+                $history->map(fn ($count, $label) => $count . ' ' . $label)->implode(', ') .
+                ') : mettez fin à son contrat plutôt que de supprimer la fiche, l’historique doit être conservé.']);
+        }
+
+        $employee->user?->update(['is_active' => false]);
         $employee->delete();
-        return back()->with('success', 'Employé supprimé.');
+
+        return back()->with('success', 'Fiche de ' . $employee->full_name . ' supprimée. Son compte utilisateur est désactivé, pas supprimé.');
     }
 
     public function terminate(Employee $employee)
     {
         abort_unless($employee->entreprise_id === auth()->user()->entreprise_id, 403);
+
+        if ($employee->status === 'inactive') {
+            return back()->withErrors(['employee' => 'Le contrat de ' . $employee->full_name . ' est déjà clôturé.']);
+        }
+
         $employee->update(['status' => 'inactive', 'contract_end_date' => now()->toDateString()]);
         $employee->user?->update(['is_active' => false]);
-        return back()->with('success', 'Le contrat de l’employé a été clôturé.');
+
+        return back()->with('success', 'Contrat de ' . $employee->full_name . ' clôturé au ' . now()->format('d/m/Y') . ' : son compte ne permet plus de se connecter.');
     }
 
     public function store(Request $request)

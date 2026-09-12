@@ -451,7 +451,7 @@
                                 $navItems[] = ['route' => 'admin.comptabilite', 'active' => ['admin.comptabilite*'], 'icon' => 'bi-calculator-fill', 'label' => __('Accounting')];
                             }
                             if (!empty($enabledRubriques['rh']) && $currentUser->hasPermission('hr')) {
-                                $navItems[] = ['route' => 'admin.rh', 'active' => ['admin.rh'], 'icon' => 'bi-people-fill', 'label' => __('HR & Paie')];
+                                $navItems[] = ['route' => 'admin.rh', 'active' => ['admin.rh'], 'icon' => 'bi-people-fill', 'label' => __('HR & Payroll')];
                             }
                             if (!empty($enabledRubriques['commercial']) && $currentUser->hasPermission('commercial')) {
                                 $navItems[] = ['route' => 'admin.commercial', 'active' => ['admin.commercial*'], 'icon' => 'bi-bag-fill', 'label' => __('Commercial')];

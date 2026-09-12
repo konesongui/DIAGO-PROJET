@@ -6,11 +6,11 @@
         padding: 0 0 32px;
     }
     .rh-hero {
-        background: linear-gradient(135deg, #0f766e 0%, #134e4a 100%);
+        background: linear-gradient(135deg, #273772 0%, #1b2550 100%);
         border-radius: 22px;
         padding: 26px 28px;
         color: #fff;
-        box-shadow: 0 18px 32px rgba(15,118,110,.18);
+        box-shadow: 0 18px 32px rgba(39,55,114,.20);
         margin-bottom: 24px;
     }
     .rh-hero h1 {
@@ -53,7 +53,7 @@
     .rh-module-card:hover {
         transform: translateY(-3px);
         box-shadow: 0 18px 30px rgba(24,39,75,.08);
-        border-color: #bfe8e1;
+        border-color: #c9d1ea;
         color: inherit;
     }
     .rh-topline, .rh-footer {
@@ -74,7 +74,7 @@
         text-transform: uppercase;
     }
     .rh-badge { background: #f3f6fb; color: #58677e; }
-    .rh-status { background: #e8fff0; color: #15803d; }
+    .rh-status { background: #eceff6; color: #273772; }
     .rh-icon {
         width: 54px;
         height: 54px;
@@ -82,16 +82,27 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        font-size: 22px;
+        font-size: 24px;
         margin-bottom: 14px;
-        background: rgba(20,184,166,.12);
-        color: #0f766e;
+        background: #273772;
+        color: #fff;
+        box-shadow: 0 8px 16px -6px rgba(39,55,114,.45);
     }
+    .rh-icon .bi { color: #fff; }
+    .rh-icon.blue { background: #2563eb; box-shadow: 0 8px 16px -6px rgba(37,99,235,.45); }
+    .rh-icon.green { background: #059669; box-shadow: 0 8px 16px -6px rgba(5,150,105,.45); }
+    .rh-icon.purple { background: #7c3aed; box-shadow: 0 8px 16px -6px rgba(124,58,237,.45); }
+    .rh-icon.orange { background: #d97706; box-shadow: 0 8px 16px -6px rgba(217,119,6,.45); }
+    .rh-icon.red { background: #dc2626; box-shadow: 0 8px 16px -6px rgba(220,38,38,.45); }
+    .rh-icon.teal { background: #0f766e; box-shadow: 0 8px 16px -6px rgba(15,118,110,.45); }
+    .rh-icon.cyan { background: #0891b2; box-shadow: 0 8px 16px -6px rgba(8,145,178,.45); }
+    .rh-icon.pink { background: #db2777; box-shadow: 0 8px 16px -6px rgba(219,39,119,.45); }
+    .rh-icon.indigo { background: #4338ca; box-shadow: 0 8px 16px -6px rgba(67,56,202,.45); }
     .rh-title {
         margin: 0 0 8px;
         font-size: 18px;
         font-weight: 700;
-        color: #1e2432;
+        color: #172033;
     }
     .rh-description {
         margin: 0 0 18px;
@@ -111,8 +122,8 @@
         padding: 10px 14px;
         font-size: 12px;
         font-weight: 700;
-        background: #0f766e;
-        color: #fff;
+        background: #FADF2F;
+        color: #172033;
         display: inline-flex;
         align-items: center;
         gap: 6px;
@@ -123,7 +134,7 @@
 
 <div class="rh-shell">
     <div class="rh-hero">
-        <span class="rh-pill"><i class="ki-duotone ki-people fs-5"></i> RH &amp; Paie</span>
+        <span class="rh-pill"><i class="bi bi-people"></i> RH &amp; Paie</span>
         <h1>{{ $title ?? 'Espace RH & Paie' }}</h1>
     </div>
 
@@ -134,12 +145,12 @@
                     <span class="rh-badge">Module RH</span>
                     <span class="rh-status">Disponible</span>
                 </div>
-                <div class="rh-icon"><i class="bi {{ $module['icon'] }}"></i></div>
+                <div class="rh-icon {{ $module['color'] ?? 'blue' }}"><i class="bi {{ $module['icon'] }}"></i></div>
                 <h3 class="rh-title">{{ $module['title'] }}</h3>
                 <p class="rh-description">{{ $module['description'] }}</p>
                 <div class="rh-footer">
                     <span class="rh-tagline">Gestion RH</span>
-                    <span class="rh-action"><i class="ki-duotone ki-arrow-right fs-6"></i> Ouvrir</span>
+                    <span class="rh-action">Ouvrir <i class="bi bi-arrow-right"></i></span>
                 </div>
             </a>
         @endforeach
